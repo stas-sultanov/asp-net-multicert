@@ -1,0 +1,31 @@
+# build result
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Dd]ebug/
+[Rr]elease/
+
+# test results
+[Tt]est[Rr]esult*/
+[Tt]ests[Rr]esult*/
+
+# code coverage results
+*.coverage
+*.coveragexml
+*.cobertura.xml
+
+# publish results
+[Oo]ut/
+
+# pack results
+*.nupkg
+*.snupkg
+
+# Old Visual Studio Solution file
+*.sln
+
+# Visual Studio cache/options directory
+.vs/
+
+# misc files
+*.user
