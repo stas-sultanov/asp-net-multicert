@@ -4,4 +4,5 @@
 		<File Path=".gitignore" />
 	</Folder>
 	<Project Path="src/multicert/multicert.csproj" />
+	<Project Path="tests/multicert.Tests/multicert.Tests.csproj" />
 </Solution>

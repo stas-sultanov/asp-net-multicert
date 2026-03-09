@@ -42,6 +42,10 @@ enum ClientHelloParseErrorCode
 	/// </summary>
 	HandshakeMessageLengthIsLessThanRequiredToContainClientHello,
 	/// <summary>
+	/// ClientHello length is less than required to contain the cipher suites.
+	/// </summary>
+	ClientHelloLengthIsLessThanRequired,
+	/// <summary>
 	/// ClientHello body does not contain required fields at expected offsets.
 	/// </summary>
 	InvalidClientHelloBody,

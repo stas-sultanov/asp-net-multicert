@@ -42,6 +42,11 @@ static class CipherSuiteParser
 	/// </summary>
 	private const Int32 RandomSize = 32;
 
+	/// <summary>
+	/// Minimum possible ClientHello body size for the fields parsed by this parser.
+	/// </summary>
+	private const Int32 ClientHelloHeaderSize = ProtocolVersionSize + RandomSize + 1 + sizeof(UInt16) + sizeof(UInt16);
+
 	#endregion
 
 	#region Public Methods
@@ -76,7 +81,7 @@ static class CipherSuiteParser
 		// Create Reader
 		var reader = new SequenceReader<Byte>(data);
 
-		var result = TryParseAsRecordWithHandshake(ref reader);
+		var result = TryParseAsRecordWithHandshake(ref reader, out var handshakeLength);
 
 		if (result != ClientHelloParseErrorCode.None)
 		{
@@ -84,7 +89,7 @@ static class CipherSuiteParser
 			return result;
 		}
 
-		result = TryParseAsHandshakeWithClientHello(ref reader);
+		result = TryParseAsHandshakeWithClientHello(ref reader, handshakeLength, out var clientHelloLength);
 
 		if (result != ClientHelloParseErrorCode.None)
 		{
@@ -92,7 +97,7 @@ static class CipherSuiteParser
 			return result;
 		}
 
-		result = TryParseAsClientHelloAndGetCipherSuites(ref reader, out cipherSuites);
+		result = TryParseAsClientHelloAndGetCipherSuites(ref reader, clientHelloLength, out cipherSuites);
 
 		return result;
 	}
@@ -106,40 +111,45 @@ static class CipherSuiteParser
 	/// and extract the Handshake bytes if successful.
 	/// </summary>
 	/// <param name="reader">The byte sequence reader instance from which the Handshake bytes are to be read.</param>
+	/// <param name="handshakeLength">The output length of the Handshake message payload as declared in the TLS record header, if parsing is successful; otherwise, zero.</param>
 	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static ClientHelloParseErrorCode TryParseAsRecordWithHandshake
 	(
-		ref SequenceReader<Byte> reader
+		ref SequenceReader<Byte> reader,
+		out UInt16 handshakeLength
 	)
 	{
 		if (!reader.TryRead(out var recordContentType))
 		{
+			handshakeLength = 0;
 			return ClientHelloParseErrorCode.RecordContentTypeReadError;
 		}
 
 		if (recordContentType != ContentTypeHandshake)
 		{
+			handshakeLength = 0;
 			return ClientHelloParseErrorCode.RecordContentTypeIsNotHandshake;
 		}
 
 		// Skip TLSPlaintext.legacy_record_version(2)
 		reader.Advance(2);
 
-		if (!reader.TryReadBigEndian(out UInt16 recordPayloadLength))
+		if (!reader.TryReadBigEndian(out handshakeLength))
 		{
 			return ClientHelloParseErrorCode.DataLengthIsLessThanRequiredByRecord;
 		}
 
-		if (reader.Remaining < recordPayloadLength)
-		{
-			return ClientHelloParseErrorCode.DataLengthIsLessThanRequiredToContainPayload;
-		}
-
-		// Payload length must be at least as Handshake header size to be able to contain a valid Handshake message
-		if (recordPayloadLength < HandshakeHeaderSize)
+		// Handshake length must be at least as Handshake header size to be able to contain a valid Handshake message
+		if (handshakeLength < HandshakeHeaderSize)
 		{
 			return ClientHelloParseErrorCode.RecordPayloadLengthIsLessThanRequiredByHandshake;
+		}
+
+		// Ensure that the reader contains at least the declared payload length to be able to read the full Handshake message
+		if (handshakeLength > reader.Remaining)
+		{
+			return ClientHelloParseErrorCode.DataLengthIsLessThanRequiredToContainPayload;
 		}
 
 		return ClientHelloParseErrorCode.None;
@@ -150,29 +160,40 @@ static class CipherSuiteParser
 	/// and extract the ClientHello bytes if successful.
 	/// </summary>
 	/// <param name="reader">The byte sequence reader instance from which the Handshake bytes are to be read.</param>
+	/// <param name="handshakeLength">The output length of the Handshake message payload as declared in the TLS record header, if parsing is successful; otherwise, zero.</param>
+	/// <param name="clientHelloLength">The output length of the ClientHello message body as declared in the Handshake message header, if parsing is successful; otherwise, zero.</param>
 	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static ClientHelloParseErrorCode TryParseAsHandshakeWithClientHello
 	(
-		ref SequenceReader<Byte> reader
+		ref SequenceReader<Byte> reader,
+		UInt32 handshakeLength,
+		out UInt32 clientHelloLength
 	)
 	{
 		if (!reader.TryRead(out var handshakeType))
 		{
+			clientHelloLength = default;
 			return ClientHelloParseErrorCode.HandshakeMessageTypeReadError;
 		}
 
 		if (handshakeType != HandshakeTypeClientHello)
 		{
+			clientHelloLength = default;
 			return ClientHelloParseErrorCode.HandshakeMessageTypeIsNotClientHello;
 		}
 
-		if (!reader.TryReadBigEndian24(out var clientHelloLength))
+		if (!reader.TryReadBigEndian24(out clientHelloLength))
 		{
 			return ClientHelloParseErrorCode.HandshakeMessageLengthReadError;
 		}
 
-		if (reader.Remaining < clientHelloLength)
+		if (clientHelloLength < ClientHelloHeaderSize)
+		{
+			return ClientHelloParseErrorCode.ClientHelloLengthIsLessThanRequired;
+		}
+
+		if (clientHelloLength > handshakeLength - HandshakeHeaderSize)
 		{
 			return ClientHelloParseErrorCode.HandshakeMessageLengthIsLessThanRequiredToContainClientHello;
 		}
@@ -186,11 +207,13 @@ static class CipherSuiteParser
 	/// </summary>
 	/// <param name="reader">The byte sequence reader instance from which the Handshake bytes are to be read.</param>
 	/// <param name="cipherSuites">The output collection of cipher suites extracted from the ClientHello message, if parsing is successful; otherwise, an empty collection.</param>
+	/// <param name="clientHelloLength"></param>
 	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static ClientHelloParseErrorCode TryParseAsClientHelloAndGetCipherSuites
 	(
 		ref SequenceReader<Byte> reader,
+		UInt32 clientHelloLength,
 		out IReadOnlyCollection<TlsCipherSuite> cipherSuites
 	)
 	{
@@ -223,7 +246,7 @@ static class CipherSuiteParser
 			return ClientHelloParseErrorCode.InvalidCipherSuitesLength;
 		}
 
-		if (reader.Remaining < cipherSuitesLength)
+		if (cipherSuitesLength > clientHelloLength - (ProtocolVersionSize + RandomSize + 1 + sessionIdLength + sizeof(UInt16)))
 		{
 			return ClientHelloParseErrorCode.InvalidCipherSuitesLength;
 		}
