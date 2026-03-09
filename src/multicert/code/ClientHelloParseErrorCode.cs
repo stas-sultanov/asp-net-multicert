@@ -8,7 +8,7 @@ enum ClientHelloParseErrorCode
 	/// <summary>
 	/// Received data length is less than required by the TLSPlaintext struct.
 	/// </summary>
-	DataLengthIsLessThanRequiredByPlaintext,
+	DataLengthIsLessThanRequiredByRecord,
 	/// <summary>
 	/// Received data length is less than required by the TLSPlaintext struct to contain the payload.
 	/// </summary>
@@ -18,18 +18,27 @@ enum ClientHelloParseErrorCode
 	/// </summary>
 	RecordContentTypeIsNotHandshake,
 	/// <summary>
+	/// Error occurred while reading the TLS record content type.
+	/// </summary>
+	RecordContentTypeReadError,
+	/// <summary>
 	/// TLS record payload length is less than required by the Handshake struct.
 	/// </summary>
 	RecordPayloadLengthIsLessThanRequiredByHandshake,
 	/// <summary>
-	/// Handshake message length is less than the minimum required.
+	/// Handshake message type is not ClientHello.
 	/// </summary>
-	HandshakeLengthIsLessThanMinimum,
 	HandshakeTypeIsNotClientHello,
 	/// <summary>
 	/// Handshake message length is less than required to contain the ClientHello struct.
 	/// </summary>
 	HandshakeLengthIsLessThanRequiredToContainClientHello,
+	/// <summary>
+	/// ClientHello body does not contain required fields at expected offsets.
+	/// </summary>
 	InvalidClientHelloBody,
+	/// <summary>
+	/// Cipher suites vector length is invalid.
+	/// </summary>
 	InvalidCipherSuitesLength
 }

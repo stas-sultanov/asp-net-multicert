@@ -16,7 +16,19 @@ builder.WebHost.ConfigureKestrel(options =>
 		{
 			httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
 			httpsOptions.AllowAnyClientCertificate();
-			httpsOptions.TlsClientHelloBytesCallback = ClientHelloCipherSuiteMiddleware.Process;
+			httpsOptions.TlsClientHelloBytesCallback = (connectionContext, data) =>
+			{
+				var cipherSuitParseResult = CipherSuiteParser.TryParse(data, out var cipherSuites);
+
+				if (cipherSuitParseResult == ClientHelloParseErrorCode.None)
+				{
+					connectionContext.Items["CipherSuites"] = cipherSuites;
+				}
+				else
+				{
+					connectionContext.Items["CipherSuiteParseErrorCode"] = cipherSuitParseResult;
+				}
+			};
 			httpsOptions.ServerCertificateSelector = (connectionContext, name) =>
 			{
 				if (connectionContext is null)
