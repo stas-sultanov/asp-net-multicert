@@ -26,13 +26,21 @@ enum ClientHelloParseErrorCode
 	/// </summary>
 	RecordPayloadLengthIsLessThanRequiredByHandshake,
 	/// <summary>
+	/// Error occurred while reading the Handshake message type.
+	/// </summary>
+	HandshakeMessageTypeReadError,
+	/// <summary>
 	/// Handshake message type is not ClientHello.
 	/// </summary>
-	HandshakeTypeIsNotClientHello,
+	HandshakeMessageTypeIsNotClientHello,
+	/// <summary>
+	/// Error occurred while reading the Handshake message length.
+	/// </summary>
+	HandshakeMessageLengthReadError,
 	/// <summary>
 	/// Handshake message length is less than required to contain the ClientHello struct.
 	/// </summary>
-	HandshakeLengthIsLessThanRequiredToContainClientHello,
+	HandshakeMessageLengthIsLessThanRequiredToContainClientHello,
 	/// <summary>
 	/// ClientHello body does not contain required fields at expected offsets.
 	/// </summary>

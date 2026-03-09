@@ -60,7 +60,23 @@ static class CipherSuiteParser
 		out IReadOnlyCollection<TlsCipherSuite> cipherSuites
 	)
 	{
-		var result = TryParseAsRecordWithHandshake(data, out var handshakePayload);
+		if (data.IsEmpty)
+		{
+			cipherSuites = [];
+			return ClientHelloParseErrorCode.DataIsEmpty;
+		}
+
+		// Check length before creating Reader
+		if (data.Length < RecordHeaderSize)
+		{
+			cipherSuites = [];
+			return ClientHelloParseErrorCode.DataLengthIsLessThanRequiredByRecord;
+		}
+
+		// Create Reader
+		var reader = new SequenceReader<Byte>(data);
+
+		var result = TryParseAsRecordWithHandshake(ref reader);
 
 		if (result != ClientHelloParseErrorCode.None)
 		{
@@ -68,7 +84,7 @@ static class CipherSuiteParser
 			return result;
 		}
 
-		result = TryParseAsHandshakeWithClientHello(handshakePayload, out var clientHelloPayload);
+		result = TryParseAsHandshakeWithClientHello(ref reader);
 
 		if (result != ClientHelloParseErrorCode.None)
 		{
@@ -76,7 +92,7 @@ static class CipherSuiteParser
 			return result;
 		}
 
-		result = TryParseAsClientHelloAndGetCipherSuites(clientHelloPayload, out cipherSuites);
+		result = TryParseAsClientHelloAndGetCipherSuites(ref reader, out cipherSuites);
 
 		return result;
 	}
@@ -89,41 +105,21 @@ static class CipherSuiteParser
 	/// Tries to parse the given bytes as a TLS record containing a handshake message,
 	/// and extract the Handshake bytes if successful.
 	/// </summary>
-	/// <param name="data">The bytes that represent the <c>TLSPlaintext</c> struct.</param>
-	/// <param name="handshake">The bytes that represent the <c>Handshake</c> struct.</param>
+	/// <param name="reader">The byte sequence reader instance from which the Handshake bytes are to be read.</param>
 	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static ClientHelloParseErrorCode TryParseAsRecordWithHandshake
 	(
-		ReadOnlySequence<Byte> data,
-		out ReadOnlySequence<Byte> handshake
+		ref SequenceReader<Byte> reader
 	)
 	{
-		if (data.IsEmpty)
-		{
-			handshake = default;
-			return ClientHelloParseErrorCode.DataIsEmpty;
-		}
-
-		// Check length before creating Reader
-		if (data.Length < RecordHeaderSize)
-		{
-			handshake = default;
-			return ClientHelloParseErrorCode.DataLengthIsLessThanRequiredByRecord;
-		}
-
-		// Create Reader
-		var reader = new SequenceReader<Byte>(data);
-
 		if (!reader.TryRead(out var recordContentType))
 		{
-			handshake = default;
 			return ClientHelloParseErrorCode.RecordContentTypeReadError;
 		}
 
 		if (recordContentType != ContentTypeHandshake)
 		{
-			handshake = default;
 			return ClientHelloParseErrorCode.RecordContentTypeIsNotHandshake;
 		}
 
@@ -132,24 +128,20 @@ static class CipherSuiteParser
 
 		if (!reader.TryReadBigEndian(out UInt16 recordPayloadLength))
 		{
-			handshake = default;
 			return ClientHelloParseErrorCode.DataLengthIsLessThanRequiredByRecord;
 		}
 
 		if (reader.Remaining < recordPayloadLength)
 		{
-			handshake = default;
 			return ClientHelloParseErrorCode.DataLengthIsLessThanRequiredToContainPayload;
 		}
 
 		// Payload length must be at least as Handshake header size to be able to contain a valid Handshake message
 		if (recordPayloadLength < HandshakeHeaderSize)
 		{
-			handshake = default;
 			return ClientHelloParseErrorCode.RecordPayloadLengthIsLessThanRequiredByHandshake;
 		}
 
-		handshake = data.Slice(reader.Position, recordPayloadLength);
 		return ClientHelloParseErrorCode.None;
 	}
 
@@ -157,59 +149,52 @@ static class CipherSuiteParser
 	/// Tries to parse the given bytes as a TLS handshake message containing a ClientHello,
 	/// and extract the ClientHello bytes if successful.
 	/// </summary>
-	/// <param name="handshakePayload">The bytes that should represent the <c>Handshake</c> struct.</param>
-	/// <param name="clientHello">The bytes that should represent the <c>ClientHello</c> struct.</param>
+	/// <param name="reader">The byte sequence reader instance from which the Handshake bytes are to be read.</param>
 	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static ClientHelloParseErrorCode TryParseAsHandshakeWithClientHello
 	(
-		ReadOnlySequence<Byte> handshakePayload,
-		out ReadOnlySequence<Byte> clientHello
+		ref SequenceReader<Byte> reader
 	)
 	{
-		if (handshakePayload.Length < HandshakeHeaderSize)
-		{
-			clientHello = default;
-			return ClientHelloParseErrorCode.RecordPayloadLengthIsLessThanRequiredByHandshake;
-		}
-
-		var reader = new SequenceReader<Byte>(handshakePayload);
 		if (!reader.TryRead(out var handshakeType))
 		{
-			clientHello = default;
-			return ClientHelloParseErrorCode.RecordPayloadLengthIsLessThanRequiredByHandshake;
+			return ClientHelloParseErrorCode.HandshakeMessageTypeReadError;
 		}
 
 		if (handshakeType != HandshakeTypeClientHello)
 		{
-			clientHello = default;
-			return ClientHelloParseErrorCode.HandshakeTypeIsNotClientHello;
+			return ClientHelloParseErrorCode.HandshakeMessageTypeIsNotClientHello;
 		}
 
 		if (!reader.TryReadBigEndian24(out var clientHelloLength))
 		{
-			clientHello = default;
-			return ClientHelloParseErrorCode.RecordPayloadLengthIsLessThanRequiredByHandshake;
+			return ClientHelloParseErrorCode.HandshakeMessageLengthReadError;
 		}
 
 		if (reader.Remaining < clientHelloLength)
 		{
-			clientHello = default;
-			return ClientHelloParseErrorCode.HandshakeLengthIsLessThanRequiredToContainClientHello;
+			return ClientHelloParseErrorCode.HandshakeMessageLengthIsLessThanRequiredToContainClientHello;
 		}
 
-		clientHello = handshakePayload.Slice(reader.Position, clientHelloLength);
 		return ClientHelloParseErrorCode.None;
 	}
 
+	/// <summary>
+	/// Tries to parse the given bytes as a TLS ClientHello message,
+	/// and extract the supported cipher suites if successful.
+	/// </summary>
+	/// <param name="reader">The byte sequence reader instance from which the Handshake bytes are to be read.</param>
+	/// <param name="cipherSuites">The output collection of cipher suites extracted from the ClientHello message, if parsing is successful; otherwise, an empty collection.</param>
+	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static ClientHelloParseErrorCode TryParseAsClientHelloAndGetCipherSuites
 	(
-		ReadOnlySequence<Byte> clientHello,
+		ref SequenceReader<Byte> reader,
 		out IReadOnlyCollection<TlsCipherSuite> cipherSuites
 	)
 	{
 		cipherSuites = [];
-		var reader = new SequenceReader<Byte>(clientHello);
-
 		if (reader.Remaining < (ProtocolVersionSize + RandomSize))
 		{
 			return ClientHelloParseErrorCode.InvalidClientHelloBody;
