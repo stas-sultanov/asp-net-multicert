@@ -1,0 +1,7 @@
+<Solution>
+	<Folder Name="/.files/">
+		<File Path=".editorconfig" />
+		<File Path=".gitignore" />
+	</Folder>
+	<Project Path="src/multicert/multicert.csproj" />
+</Solution>

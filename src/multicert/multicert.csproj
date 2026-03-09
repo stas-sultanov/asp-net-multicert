@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<PropertyGroup>
+		<AnalysisLevel>latest-all</AnalysisLevel>
+		<AssemblyName>Multicert</AssemblyName>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<EnableNETAnalyzers>true</EnableNETAnalyzers>
+		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<LangVersion>13.0</LangVersion>
+		<Nullable>enable</Nullable>
+		<TargetFramework>net10.0</TargetFramework>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+		<UserSecretsId>7fa7f06e-87f2-4e97-aeb2-c68b110057a1</UserSecretsId>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<RunWorkingDirectory>/home/stass/repos/github-stas/asp-net-multicert/src/multicert</RunWorkingDirectory>
+	</PropertyGroup>
+</Project>
