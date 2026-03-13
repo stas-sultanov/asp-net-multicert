@@ -17,4 +17,8 @@
 	<PropertyGroup>
 		<RunWorkingDirectory>/home/stass/repos/github-stas/asp-net-multicert/src/multicert</RunWorkingDirectory>
 	</PropertyGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\System.Utils\System.Utils.csproj" />
+	</ItemGroup>
 </Project>

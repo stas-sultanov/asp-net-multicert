@@ -1,105 +1,120 @@
+// Authored by Stas Sultanov
+// Copyright © Stas Sultanov
+
 using System.Net.Security;
 using System.Net.WebSockets;
-using System.Security.Cryptography.X509Certificates;
+using System.Security.Authentication;
 
 using Microsoft.AspNetCore.Connections.Features;
-
 using Microsoft.AspNetCore.Server.Kestrel.Https;
 
-var builder = WebApplication.CreateBuilder(args);
-
-builder.WebHost.ConfigureKestrel(options =>
+/// <summary>
+/// This sample demonstrates how to implement a WebSocket server that requires client certificates for authentication.
+/// </summary>
+internal partial class Program
 {
-	options.ListenAnyIP(8443, listenOptions =>
+	private static void Main(String[] args)
 	{
-		_ = listenOptions.UseHttps(httpsOptions =>
+		var builder = WebApplication.CreateBuilder(args);
+
+		_ = builder.WebHost.ConfigureKestrel(options =>
 		{
-			httpsOptions.ClientCertificateMode = ClientCertificateMode.RequireCertificate;
-			httpsOptions.AllowAnyClientCertificate();
-			httpsOptions.TlsClientHelloBytesCallback = (connectionContext, data) =>
+			options.ListenAnyIP(8443, listenOptions =>
 			{
-				var cipherSuitParseResult = CipherSuiteParser.TryParse(data, out var cipherSuites);
-
-				if (cipherSuitParseResult == ClientHelloParseErrorCode.None)
+				_ = listenOptions.UseHttps(httpsOptions =>
 				{
-					connectionContext.Items["CipherSuites"] = cipherSuites;
-				}
-				else
-				{
-					connectionContext.Items["CipherSuiteParseErrorCode"] = cipherSuitParseResult;
-				}
-			};
-			httpsOptions.ServerCertificateSelector = (connectionContext, name) =>
-			{
-				if (connectionContext is null)
-				{
-					throw new ArgumentNullException(nameof(connectionContext));
-				}
+#pragma warning disable CA5398 // Avoid hardcoded SslProtocols values
 
-				var tlsHandshakeFeature = connectionContext.Features.Get<ITlsHandshakeFeature>();
+					httpsOptions.SslProtocols = SslProtocols.Tls13;
+#pragma warning restore CA5398 // Avoid hardcoded SslProtocols values
 
-				// connectionContext.Transport.Input.
+					httpsOptions.TlsClientHelloBytesCallback = (connectionContext, data) =>
+					{
+						var cipherSuitParseResult = CipherSuitesParser.TryParse(data, out var cipherSuites);
 
-				var memoryPoolFeature  = connectionContext.Features.Get<IMemoryPoolFeature >();
+						if (cipherSuitParseResult == CipherSuitesParseErrorCode.None)
+						{
+							connectionContext.Items["CipherSuites"] = cipherSuites;
+						}
+						else
+						{
+							connectionContext.Items["CipherSuiteParseErrorCode"] = cipherSuitParseResult;
+						}
+					};
+					httpsOptions.ServerCertificateSelector = (connectionContext, name) =>
+					{
+						if (connectionContext is null)
+						{
+							throw new ArgumentNullException(nameof(connectionContext));
+						}
 
-				//memoryPoolFeature.MemoryPool.Rent
+						var tlsHandshakeFeature = connectionContext.Features.Get<ITlsHandshakeFeature>();
 
-				// memoryPoolFeature?.MemoryPool
+						// connectionContext.Transport.Input.
 
-				// For demonstration purposes, we can use a self-signed certificate.
-				// In production, you would load a proper certificate from a secure location.
-				return null;
-			};
+						var memoryPoolFeature  = connectionContext.Features.Get<IMemoryPoolFeature >();
+
+						//memoryPoolFeature.MemoryPool.Rent
+
+						// memoryPoolFeature?.MemoryPool
+
+						// For demonstration purposes, we can use a self-signed certificate.
+						// In production, you would load a proper certificate from a secure location.
+
+						return null;
+					};
+				});
+
+			});
 		});
 
-	});
-});
+		var app = builder.Build();
 
-var app = builder.Build();
+		_ = app.UseWebSockets();
 
-app.UseWebSockets();
+		_ = app.MapGet("/", () => Results.Ok(new
+		{
+			Message = "WebSocket endpoint: wss://localhost:8443/ws",
+			ClientCertificateMode = "RequireCertificate"
+		}));
 
-app.MapGet("/", () => Results.Ok(new
-{
-	Message = "WebSocket endpoint: wss://localhost:8443/ws",
-	ClientCertificateMode = "AllowCertificate"
-}));
+		_ = app.Map("/ws", async context =>
+		{
+			if (!context.WebSockets.IsWebSocketRequest)
+			{
+				context.Response.StatusCode = StatusCodes.Status400BadRequest;
+				await context.Response.WriteAsync("Expected a WebSocket upgrade request.");
+				return;
+			}
 
-app.Map("/ws", async context =>
-{
-	if (!context.WebSockets.IsWebSocketRequest)
-	{
-		context.Response.StatusCode = StatusCodes.Status400BadRequest;
-		await context.Response.WriteAsync("Expected a WebSocket upgrade request.");
-		return;
-	}
+			var clientCertificate = await context.Connection.GetClientCertificateAsync();
 
-	var clientCertificate = await context.Connection.GetClientCertificateAsync();
+			Console.WriteLine("[WS Handshake] Client certificate intercepted:");
+			if (clientCertificate is null)
+			{
+				Console.WriteLine("  No client certificate provided.");
+			}
+			else
+			{
+				Console.WriteLine($"  Subject: {clientCertificate.Subject}");
+				Console.WriteLine($"  Issuer: {clientCertificate.Issuer}");
+				Console.WriteLine($"  Thumbprint: {clientCertificate.Thumbprint}");
+				Console.WriteLine($"  NotBefore: {clientCertificate.NotBefore:O}");
+				Console.WriteLine($"  NotAfter: {clientCertificate.NotAfter:O}");
+			}
 
-	Console.WriteLine("[WS Handshake] Client certificate intercepted:");
-	if (clientCertificate is null)
-	{
-		Console.WriteLine("  No client certificate provided.");
-	}
-	else
-	{
-		Console.WriteLine($"  Subject: {clientCertificate.Subject}");
-		Console.WriteLine($"  Issuer: {clientCertificate.Issuer}");
-		Console.WriteLine($"  Thumbprint: {clientCertificate.Thumbprint}");
-		Console.WriteLine($"  NotBefore: {clientCertificate.NotBefore:O}");
-		Console.WriteLine($"  NotAfter: {clientCertificate.NotAfter:O}");
-	}
+			using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
 
-	using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
-
-	var certificateSummary = clientCertificate is null
+			var certificateSummary = clientCertificate is null
 		? "Client certificate: none"
 		: $"Client certificate subject: {clientCertificate.Subject}";
 
-	var payload = System.Text.Encoding.UTF8.GetBytes(certificateSummary);
-	await webSocket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None);
+			var payload = System.Text.Encoding.UTF8.GetBytes(certificateSummary);
+			await webSocket.SendAsync(payload, WebSocketMessageType.Text, endOfMessage: true, CancellationToken.None);
 
-	await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
-});
+			await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Done", CancellationToken.None);
+		});
 
-app.Run();
+		app.Run();
+	}
+}

@@ -6,20 +6,35 @@ using Xunit;
 public sealed class CipherSuiteParserBoundaryTests
 {
 	[Fact]
-	public void TryParse_CurrentImplementation_AllowsReadingPastDeclaredClientHelloLength_WithinOneRecord()
+	public void TryParse_ShouldFail_WhenCipherSuitesLengthExceedsDeclaredClientHelloLength()
 	{
-		// Declared ClientHello length is exactly the parser's minimum accepted length (39).
+		// Declared ClientHello length (39) is below the parser's minimum accepted length (49).
 		const UInt32 declaredClientHelloLength = 39;
 
-		// Actual bytes contain a cipher_suites_length (64) that cannot fit in 39 bytes.
+		// Actual bytes contain a cipher_suites_length (64) that cannot fit in the declared 39-byte body.
 		// Extra suites bytes are appended after byte 39 in the same TLS record.
 		var clientHello = CreateClientHelloWithDeclaredLengthOverflow();
 		var handshake = CreateHandshake(clientHello, declaredClientHelloLength);
 		var record = CreateTLSPlainText(handshake);
 
-		var result = CipherSuiteParser.TryParse(new ReadOnlySequence<Byte>(record), out var cipherSuites);
+		var result = CipherSuitesParser.TryParse(new ReadOnlySequence<Byte>(record), out var cipherSuites);
 
-		Assert.Equal(ClientHelloParseErrorCode.InvalidCipherSuitesLength, result);
+		Assert.Equal(CipherSuitesParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid, result);
+		Assert.Empty(cipherSuites);
+	}
+
+	[Fact]
+	public void TryParse_ShouldFail_WhenSessionIdExceedsDeclaredClientHelloLength_EvenIfRecordHasExtraBytes()
+	{
+		const UInt32 declaredClientHelloLength = 39;
+
+		var clientHello = CreateClientHelloWithSessionIdOverflow();
+		var handshake = CreateHandshake(clientHello, declaredClientHelloLength);
+		var record = CreateTLSPlainText(handshake);
+
+		var result = CipherSuitesParser.TryParse(new ReadOnlySequence<Byte>(record), out var cipherSuites);
+
+		Assert.Equal(CipherSuitesParseErrorCode.ClientHelloField_LegacySessionIdLength_ValueIsInvalid, result);
 		Assert.Empty(cipherSuites);
 	}
 
@@ -33,9 +48,9 @@ public sealed class CipherSuiteParserBoundaryTests
 
 		var record = CreateTLSPlainText(handshake);
 
-		var result = CipherSuiteParser.TryParse(new ReadOnlySequence<Byte>(record), out _);
+		var result = CipherSuitesParser.TryParse(new ReadOnlySequence<Byte>(record), out _);
 
-		Assert.Equal(ClientHelloParseErrorCode.ClientHelloLengthIsLessThanRequired, result);
+		Assert.Equal(CipherSuitesParseErrorCode.HandshakeField_Length_ValueIsInvalid, result);
 	}
 
 	private static Byte[] CreateClientHello()
@@ -73,6 +88,33 @@ public sealed class CipherSuiteParserBoundaryTests
 			clientHelloBody[index] = 0x13;
 			clientHelloBody[index + 1] = 0x01;
 		}
+
+		return clientHelloBody;
+	}
+
+	private static Byte[] CreateClientHelloWithSessionIdOverflow()
+	{
+		// Declared ClientHello length is 39, but session_id length is 40.
+		// Extra bytes after the declared boundary must not make parser accept it.
+		var clientHelloBody = new Byte[80];
+
+		for (var index = 0; index < 34; index++)
+		{
+			clientHelloBody[index] = 0xAA;
+		}
+
+		clientHelloBody[34] = 0x28; // session_id length = 40
+
+		for (var index = 35; index < 75; index++)
+		{
+			clientHelloBody[index] = 0xBB;
+		}
+
+		clientHelloBody[75] = 0x00; // cipher_suites length hi
+		clientHelloBody[76] = 0x02; // cipher_suites length lo
+		clientHelloBody[77] = 0x13; // TLS_AES_128_GCM_SHA256 hi
+		clientHelloBody[78] = 0x01; // TLS_AES_128_GCM_SHA256 lo
+		clientHelloBody[79] = 0x00; // trailing byte
 
 		return clientHelloBody;
 	}

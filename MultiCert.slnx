@@ -3,6 +3,12 @@
 		<File Path=".editorconfig" />
 		<File Path=".gitignore" />
 	</Folder>
+	<Folder Name="/src/">
+		<Project Path="src/System.Utils/System.Utils.csproj" />
+	</Folder>
+	<Folder Name="/tests/">
+		<Project Path="tests/System.Utils/System.UtilsTests.csproj" />
+	</Folder>
 	<Project Path="src/multicert/multicert.csproj" />
 	<Project Path="tests/multicert.Tests/multicert.Tests.csproj" />
 </Solution>
