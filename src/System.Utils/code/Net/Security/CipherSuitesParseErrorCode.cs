@@ -11,7 +11,7 @@ public enum CipherSuitesParseErrorCode
 	/// <summary>
 	/// No error occurred, and the cipher suites were successfully parsed from the input data.
 	/// </summary>
-	None = 0,
+	None = 0x0000,
 
 	/// <summary>
 	/// The input data is empty, so there is no TLS record to parse.

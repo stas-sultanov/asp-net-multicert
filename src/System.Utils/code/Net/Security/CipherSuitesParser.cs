@@ -7,7 +7,7 @@ using System.Buffers;
 using System.Runtime.CompilerServices;
 
 /// <summary>
-/// Parses a TLS ClientHello message and extracts the advertised cipher suites.
+/// Provides functionality to parse TLSPlainText that contains a Handshake message with a ClientHello.
 /// </summary>
 /// <remarks>
 /// Designed according to <see href="https://www.rfc-editor.org/rfc/rfc8446">RFC 8446</see>.
@@ -57,7 +57,7 @@ public static class CipherSuitesParser
 		// Create reader
 		var reader = new SequenceReader<Byte>(data);
 
-		// Layer 0: TLSPlaintext record containing a Handshake message
+		// TLSPlaintext record containing a Handshake message
 		var result = TryProcessRecord(ref reader, out var handshakeLength);
 
 		if (result != CipherSuitesParseErrorCode.None)
@@ -66,7 +66,7 @@ public static class CipherSuitesParser
 			return result;
 		}
 
-		// Layer 1: Handshake message containing a ClientHello message
+		// Handshake message containing a ClientHello message
 		result = TryProcessHandshake(ref reader, handshakeLength, out var clientHelloLength);
 
 		if (result != CipherSuitesParseErrorCode.None)
@@ -75,7 +75,7 @@ public static class CipherSuitesParser
 			return result;
 		}
 
-		// Layer 2: ClientHello message containing the cipher suites
+		// ClientHello message containing the cipher suites
 		result = TryProcessClientHello(ref reader, clientHelloLength, out cipherSuites);
 
 		return result;
