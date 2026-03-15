@@ -10,5 +10,4 @@
 	<Folder Name="/tests/">
 		<Project Path="tests/System.Utils.Tests/System.Utils.Tests.csproj" />
 	</Folder>
-	<Project Path="src/multicert/multicert.csproj" />
 </Solution>

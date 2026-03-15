@@ -4,9 +4,9 @@
 namespace System.Net.Security;
 
 /// <summary>
-/// Defines error codes for the <see cref="CipherSuitesParser.TryParse"/> method.
+/// Defines error codes for the <see cref="ClientHelloParser.TryParse"/> method.
 /// </summary>
-public enum CipherSuitesParseErrorCode
+public enum ClientHelloParseErrorCode
 {
 	/// <summary>
 	/// No error occurred, and the cipher suites were successfully parsed from the input data.

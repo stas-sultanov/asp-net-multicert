@@ -152,7 +152,9 @@ dotnet_diagnostic.CA1815.severity = none
 dotnet_diagnostic.CA2007.severity = none
 
 dotnet_diagnostic.IDE0005.severity = warning
+dotnet_diagnostic.IDE0010.severity = none
 dotnet_diagnostic.IDE0055.severity = warning
+dotnet_diagnostic.IDE0072.severity = none
 
 #### C# Coding Conventions ####
 

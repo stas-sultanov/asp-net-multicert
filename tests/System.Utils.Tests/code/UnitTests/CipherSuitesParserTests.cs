@@ -7,7 +7,7 @@ using System.Buffers;
 using System.Net.Security;
 using System.Security.Cryptography;
 
-// Contains tests for parsing TLS ClientHello cipher suites from raw record bytes.
+// Contains tests for parsing TLS ClientHello signature algorithms from raw record bytes.
 
 [TestClass]
 public sealed class CipherSuitesParserTests
@@ -19,10 +19,10 @@ public sealed class CipherSuitesParserTests
 	{
 		var data = ReadOnlySequence<Byte>.Empty;
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.DataIsEmpty, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.DataIsEmpty, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	[TestMethod]
@@ -30,10 +30,10 @@ public sealed class CipherSuitesParserTests
 	{
 		var data = new ReadOnlySequence<Byte>(new Byte[4]);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.DataLengthIsInvalid, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.DataLengthIsInvalid, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	#endregion
@@ -47,10 +47,10 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.RecordField_Type_ValueIsNotHandshake, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.RecordField_Type_ValueIsNotHandshake, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	[TestMethod]
@@ -61,10 +61,10 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.RecordField_Length_ValueIsInvalid, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.RecordField_Length_ValueIsInvalid, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	[TestMethod]
@@ -75,10 +75,10 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.RecordField_Length_ValueIsInvalid, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.RecordField_Length_ValueIsInvalid, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	#endregion
@@ -94,10 +94,10 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.HandshakeField_MessageType_ValueIsNotClientHello, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.HandshakeField_MessageType_ValueIsNotClientHello, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	[TestMethod]
@@ -109,10 +109,10 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.HandshakeField_Length_ValueIsInvalid, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.HandshakeField_Length_ValueIsInvalid, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	[TestMethod]
@@ -123,10 +123,10 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.HandshakeField_Length_ValueIsInvalid, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.HandshakeField_Length_ValueIsInvalid, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	#endregion
@@ -142,10 +142,10 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.ClientHelloField_LegacySessionIdLength_ValueIsInvalid, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.ClientHelloField_LegacySessionIdLength_ValueIsInvalid, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	[TestMethod]
@@ -157,10 +157,10 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	[TestMethod]
@@ -172,15 +172,17 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var cipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		Assert.AreEqual(CipherSuitesParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid, result);
-		Assert.IsEmpty(cipherSuites);
+		Assert.AreEqual(ClientHelloParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid, result);
+		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
 	}
 
 	[TestMethod]
 	public void TryParse_Succeed_If_ClientHello_IsValid()
 	{
+		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.ECDSA;
+
 		var expectedCipherSuites = new TlsCipherSuite []
 		{
 			TlsCipherSuite.TLS_AES_128_GCM_SHA256,
@@ -193,10 +195,10 @@ public sealed class CipherSuitesParserTests
 
 		var data = new ReadOnlySequence<Byte>(record);
 
-		var result = CipherSuitesParser.TryParse(data, out var actualCipherSuites);
+		var result = ClientHelloParser.TryParse(data, out var actualSignatureAlgorithms);
 
-		CollectionAssert.AreEqual(expectedCipherSuites, actualCipherSuites.ToArray());
-		Assert.AreEqual(CipherSuitesParseErrorCode.None, result);
+		Assert.AreEqual(ClientHelloParseErrorCode.None, result);
+		Assert.AreEqual(expectedSignatureAlgorithms, actualSignatureAlgorithms);
 	}
 
 	#endregion

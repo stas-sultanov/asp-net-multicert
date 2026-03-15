@@ -8,159 +8,121 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
 using System.Security.Authentication;
-using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
 
 [SupportedOSPlatform("linux")]
 [TestClass]
 public sealed class CipherSuitesIntegrationTests
 {
+	#region Fields
+
+	public TestContext TestContext { get; set; }
+	private const String PublicKeyOidRsa = "1.2.840.113549.1.1.1";
+	private const String PublicKeyOidEcPublicKey = "1.2.840.10045.2.1";
+
+	#endregion
+
 	[TestMethod]
-	public async Task Tls12_ClientHello_ShouldIncludeConfiguredCipherSuite()
+	public async Task Server_Success_WhenOfferRightCertificate_TLS12_RSA()
 	{
-		var expectedSuite = TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
-		var allowedSuites = new[]
-		{
-			TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-			TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-			TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
-			TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384
-		};
-		var resultSignal = new TaskCompletionSource<(CipherSuitesParseErrorCode ParseResult, IReadOnlyCollection<TlsCipherSuite> Suites)>(TaskCreationOptions.RunContinuationsAsynchronously);
-		var port = GetFreeTcpPort();
-
-		await using var app = await StartServerAsync(port, SslProtocols.Tls12, resultSignal, allowedSuites);
-
-		await ConnectWithTlsAsync(
-			port,
-			SslProtocols.Tls12,
-			new CipherSuitesPolicy([expectedSuite])
-		);
-
-		var (parseResult, suites) = await resultSignal.Task.WaitAsync(TimeSpan.FromSeconds(10));
-
-		Assert.AreEqual(CipherSuitesParseErrorCode.None, parseResult);
-		Assert.Contains(expectedSuite, suites);
+		await ServerShouldPresentRightCertificate(SslProtocols.Tls12, TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.RSA);
 	}
 
 	[TestMethod]
-	public async Task Tls13_ClientHello_ShouldIncludeConfiguredCipherSuite()
+	public async Task Server_Success_WhenOfferRightCertificate_TLS12_ECDSA()
 	{
-		var expectedSuite = TlsCipherSuite.TLS_AES_128_GCM_SHA256;
-		var allowedSuites = new[]
-		{
-			TlsCipherSuite.TLS_AES_128_GCM_SHA256,
-			TlsCipherSuite.TLS_AES_256_GCM_SHA384
-		};
-		var resultSignal = new TaskCompletionSource<(CipherSuitesParseErrorCode ParseResult, IReadOnlyCollection<TlsCipherSuite> Suites)>(TaskCreationOptions.RunContinuationsAsynchronously);
-		var port = GetFreeTcpPort();
-
-		await using var app = await StartServerAsync(port, SslProtocols.Tls13, resultSignal, allowedSuites);
-
-		await ConnectWithTlsAsync(
-			port,
-			SslProtocols.Tls13,
-			new CipherSuitesPolicy([expectedSuite])
-		);
-
-		var (parseResult, suites) = await resultSignal.Task.WaitAsync(TimeSpan.FromSeconds(10));
-
-		Assert.AreEqual(CipherSuitesParseErrorCode.None, parseResult);
-		Assert.Contains(expectedSuite, suites);
+		await ServerShouldPresentRightCertificate(SslProtocols.Tls12, TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA);
 	}
 
-	private static async Task<WebApplication> StartServerAsync
+	[TestMethod]
+	public async Task Server_Success_WhenOfferRightCertificate_TLS13_ECDSA()
+	{
+		await ServerShouldPresentRightCertificate(SslProtocols.Tls13, TlsCipherSuite.TLS_AES_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA);
+	}
+
+	public async Task ServerShouldPresentRightCertificate
 	(
-		Int32 port,
-		SslProtocols sslProtocols,
-		TaskCompletionSource<(CipherSuitesParseErrorCode ParseResult, IReadOnlyCollection<TlsCipherSuite> Suites)> resultSignal,
-		TlsCipherSuite[] allowedSuites
+		SslProtocols protocol,
+		TlsCipherSuite cipherSuite,
+		TlsSignatureAlgorithms expectedSignatureAlgorithm
 	)
 	{
+		var port = GetFreeTcpPort();
 
-		var certificates = new List<X509Certificate2>(allowedSuites.Length);
+		// Create server.
+		var server = new TestServer();
 
-		foreach (var suite in allowedSuites)
-		{
-			certificates.Add(CreateSelfSignedCertificate(suite));
-		}
+		// Build server application.
+		using var serverApplication = server.Build(port, SslProtocols.Tls12 | SslProtocols.Tls13);
 
-		var certificate = certificates[0];
+		// Start listening for incoming connections.
+		await serverApplication.StartAsync(TestContext.CancellationToken);
 
-		// Crete builder
-		var builder = WebApplication.CreateBuilder();
+		// Connect to the server with a client configured to use the expected cipher suite.
+		var actualCertificateKeyType = await ConnectAndGetInfo(port, protocol, [cipherSuite], TestContext.CancellationToken);
 
-		_ = builder.WebHost.ConfigureKestrel
-		(
-			options =>
-			{
-				/*
-				options.ConfigureHttpsDefaults(o =>
-				{
-					o.OnAuthenticate = (context, sslOptions) =>
-					{
-						sslOptions.CipherSuitesPolicy = new CipherSuitesPolicy(allowedSuites);
-					};
-				});
-				*/
+		// Stop the server application.
+		await serverApplication.StopAsync(TestContext.CancellationToken);
 
-				options.Listen(IPAddress.Loopback, port, listenOptions =>
-				{
-					_ = listenOptions.UseHttps(httpsOptions =>
-					{
-						// Set TLS protocols
-						httpsOptions.SslProtocols = sslProtocols;
-
-						// Subscribe to TLS ClientHello callback to capture the offered cipher suites
-						httpsOptions.TlsClientHelloBytesCallback = (connectionContext, data) =>
-						{
-							var cipherSuitParseResult = CipherSuitesParser.TryParse(data, out var cipherSuites);
-
-							if (cipherSuitParseResult == CipherSuitesParseErrorCode.None)
-							{
-								connectionContext.Items["CipherSuites"] = cipherSuites;
-							}
-							else
-							{
-								connectionContext.Items["CipherSuiteParseErrorCode"] = cipherSuitParseResult;
-							}
-						};
-
-						httpsOptions.ServerCertificateSelector = (connectionContext, name) => certificate;
-					});
-				});
-			}
-		);
-
-		var app = builder.Build();
-		_ = app.MapGet("/", () => Results.Ok());
-		await app.StartAsync();
-		return app;
+		Assert.AreEqual(expectedCertificateKeyType, actualCertificateKeyType);
 	}
 
-	private static async Task ConnectWithTlsAsync(Int32 port, SslProtocols protocol, CipherSuitesPolicy cipherSuitesPolicy)
+	[Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5359:Do Not Disable Certificate Validation", Justification = "<Pending>")]
+	private async Task<TlsSignatureAlgorithms> ConnectAndGetInfo
+	(
+		Int32 port,
+		SslProtocols protocol,
+		IEnumerable<TlsCipherSuite> cipherSuites,
+		CancellationToken cancellationToken = default
+	)
 	{
 		using var tcpClient = new TcpClient();
-		await tcpClient.ConnectAsync(IPAddress.Loopback, port);
+		await tcpClient.ConnectAsync(IPAddress.Loopback, port, cancellationToken);
 
 		using var sslStream = new SslStream(tcpClient.GetStream(), false);
 
-		await sslStream.AuthenticateAsClientAsync(
-			new SslClientAuthenticationOptions
-			{
-				TargetHost = "localhost",
-				EnabledSslProtocols = protocol,
-				CipherSuitesPolicy = cipherSuitesPolicy,
-				CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
-#pragma warning disable CA5359
-				RemoteCertificateValidationCallback = static (_, _, _, _) => true
-#pragma warning restore CA5359
-			}
-		);
+		var cipherSuitesPolicy = new CipherSuitesPolicy(cipherSuites);
+
+		var sslClientAuthenticationOptions = new SslClientAuthenticationOptions
+		{
+			TargetHost = "localhost",
+			EnabledSslProtocols = protocol,
+			CipherSuitesPolicy = cipherSuitesPolicy,
+			CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
+			RemoteCertificateValidationCallback = static (_, _, _, _) => true
+		};
+
+		try
+		{
+			await sslStream.AuthenticateAsClientAsync(sslClientAuthenticationOptions, cancellationToken);
+		}
+		catch (Exception ex)
+		{
+			TestContext.WriteLine($"TLS handshake failed: {ex}");
+			throw;
+		}
+
+		if (sslStream.RemoteCertificate is null)
+		{
+			throw new InvalidOperationException("Server did not provide a certificate during TLS negotiation.");
+		}
+
+		var serverCertificate = new X509Certificate2(sslStream.RemoteCertificate);
+		var serverCertificateKeyType = GetCertificateKeyType(serverCertificate);
+
+		return serverCertificateKeyType;
+	}
+
+	private static TlsSignatureAlgorithms GetCertificateKeyType(X509Certificate2 certificate)
+	{
+		var publicKeyOid = certificate.PublicKey.Oid?.Value;
+
+		return publicKeyOid switch
+		{
+			PublicKeyOidRsa => TlsSignatureAlgorithms.RSA,
+			PublicKeyOidEcPublicKey => TlsSignatureAlgorithms.ECDSA,
+			_ => TlsSignatureAlgorithms.None
+		};
 	}
 
 	private static Int32 GetFreeTcpPort()
@@ -170,57 +132,5 @@ public sealed class CipherSuitesIntegrationTests
 		var port = ((IPEndPoint) listener.LocalEndpoint).Port;
 		listener.Stop();
 		return port;
-	}
-
-	private static X509Certificate2 CreateSelfSignedCertificate(TlsCipherSuite cipherSuite)
-	{
-		// Cipher suites are not embedded in certificates. We derive certificate key algorithm
-		// from suite name to ensure the generated cert is compatible with that suite.
-		var suiteName = cipherSuite.ToString();
-		var requiresEcdsa = suiteName.Contains("ECDSA", StringComparison.Ordinal);
-
-		return requiresEcdsa
-			? CreateEcdsaSelfSignedCertificate()
-			: CreateRsaSelfSignedCertificate();
-	}
-
-	private static X509Certificate2 CreateEcdsaSelfSignedCertificate()
-	{
-		using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-		var request = new CertificateRequest("CN=localhost", ecdsa, HashAlgorithmName.SHA256);
-		request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
-		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, false));
-		request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
-
-		var eku = new OidCollection
-		{
-			new("1.3.6.1.5.5.7.3.1")
-		};
-		request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(eku, false));
-
-		return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(7));
-	}
-
-	private static X509Certificate2 CreateRsaSelfSignedCertificate()
-	{
-		using var rsa = RSA.Create(2048);
-		var request = new CertificateRequest(
-			"CN=localhost",
-			rsa,
-			HashAlgorithmName.SHA256,
-			RSASignaturePadding.Pkcs1
-		);
-
-		request.CertificateExtensions.Add(new X509BasicConstraintsExtension(false, false, 0, false));
-		request.CertificateExtensions.Add(new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false));
-		request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
-
-		var eku = new OidCollection
-		{
-			new("1.3.6.1.5.5.7.3.1")
-		};
-		request.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(eku, false));
-
-		return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(7));
 	}
 }

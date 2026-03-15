@@ -5,8 +5,10 @@
 		<AssemblyName>System.UtilsTests</AssemblyName>
 		<EnableNETAnalyzers>true</EnableNETAnalyzers>
 		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<LangVersion>latest</LangVersion>
+		<NoWarn>$(NoWarn);CS1591</NoWarn>
 		<Nullable>enable</Nullable>
 		<TargetFramework>net10.0</TargetFramework>
 		<TestingExtensionsProfile>None</TestingExtensionsProfile>
