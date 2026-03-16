@@ -64,7 +64,7 @@ public sealed class SequenceReaderExtensionsUnsignedTests
 	[TestMethod]
 	public void TryReadBigEndian24_Succeed_WhenEnoughData()
 	{
-		var expectedValue = (UInt32) 0x123456;
+		var expectedValue = 0x123456;
 
 		var data = new ReadOnlySequence<Byte>
 		(

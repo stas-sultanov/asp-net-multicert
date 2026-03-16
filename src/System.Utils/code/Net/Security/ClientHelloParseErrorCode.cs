@@ -56,5 +56,15 @@ public enum ClientHelloParseErrorCode
 	/// <summary>
 	/// The ClientHello.cipher_suites.length field value is invalid.
 	/// </summary>
-	ClientHelloField_CipherSuitesLength_ValueIsInvalid = 0x0321
+	ClientHelloField_CipherSuitesLength_ValueIsInvalid = 0x0321,
+
+	/// <summary>
+	/// The ClientHello.legacy_compression_methods.length field value is invalid.
+	/// </summary>
+	ClientHelloField_LegacyCompressionMethodsLength_ValueIsInvalid = 0x0331,
+
+	/// <summary>
+	/// The ClientHello.extensions.length field value is invalid.
+	/// </summary>
+	ClientHelloField_ExtensionsLength_ValueIsInvalid = 0x0341
 }

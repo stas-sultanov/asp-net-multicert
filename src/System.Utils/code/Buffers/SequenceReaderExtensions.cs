@@ -41,12 +41,12 @@ internal static class SequenceReaderExtensionsUnsigned
 	public static Boolean TryReadBigEndian24
 	(
 		ref this SequenceReader<Byte> reader,
-		out UInt32 value
+		out Int32 value
 	)
 	{
 		if (reader.TryRead(out var b0) && reader.TryRead(out var b1) && reader.TryRead(out var b2))
 		{
-			value = (UInt32) ((b0 << 16) | (b1 << 8) | b2);
+			value = (b0 << 16) | (b1 << 8) | b2;
 			return true;
 		}
 
