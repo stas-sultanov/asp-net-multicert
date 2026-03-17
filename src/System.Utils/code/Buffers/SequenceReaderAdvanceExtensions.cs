@@ -9,7 +9,7 @@ using System.Runtime.CompilerServices;
 /// Provides extended functionality for the <see cref="SequenceReader{T}"/> class
 /// that allows reading endian-specific numeric values from binary data.
 /// </summary>
-internal static class SequenceReaderExtensionsUnsigned
+internal static class SequenceReaderAdvanceExtensions
 {
 	/// <summary>
 	/// Tries to read an <see cref="UInt16"/> as big endian.

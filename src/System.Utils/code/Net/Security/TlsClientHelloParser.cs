@@ -14,7 +14,7 @@ using System.Runtime.CompilerServices;
 /// Designed according to <see href="https://www.rfc-editor.org/rfc/rfc8446">RFC 8446</see>.
 /// And implemented to support TLS versions 1.2 and 1.3, as these are the versions supported by .NET SslStream.
 /// </remarks>
-public static class ClientHelloParser
+public static class TlsClientHelloParser
 {
 	#region Constants and Static Fields
 
@@ -25,9 +25,9 @@ public static class ClientHelloParser
 	private const UInt32 HandshakeHeaderSize = 4;
 
 	/// <summary>
-	/// TLS 1.2 cipher suite lookup table used to infer the server authentication algorithm.
+	/// TLS 1.2 lookup table to infer server authentication signature algorithms from the cipher suites advertised in ClientHello.
 	/// </summary>
-	private static readonly FrozenDictionary<TlsCipherSuite, TlsSignatureAlgorithms> tls12ServerAuthLookup
+	private static readonly FrozenDictionary<TlsCipherSuite, TlsSignatureAlgorithms> tls12AuthSALookup
 		= new Dictionary<TlsCipherSuite, TlsSignatureAlgorithms>
 	{
 		{ TlsCipherSuite.TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA, TlsSignatureAlgorithms.RSA },
@@ -182,9 +182,9 @@ public static class ClientHelloParser
 	}.ToFrozenDictionary();
 
 	/// <summary>
-	/// SignatureScheme lookup table used to infer certificate signature algorithm support.
+	/// TLS 1.3 lookup table to infer server authentication signature algorithms from the signature_algorithms extension advertised in ClientHello.
 	/// </summary>
-	private static readonly FrozenDictionary<UInt16, TlsSignatureAlgorithms> signatureSchemeLookup
+	private static readonly FrozenDictionary<UInt16, TlsSignatureAlgorithms> tls13AuthSALookup
 		= new Dictionary<UInt16, TlsSignatureAlgorithms>
 	{
 		{ 0x0201, TlsSignatureAlgorithms.RSA },
@@ -215,9 +215,9 @@ public static class ClientHelloParser
 	/// </summary>
 	/// <param name="data">The bytes that should represent the TLS ClientHello message, starting from the beginning of the TLS record.</param>
 	/// <param name="signatureAlgorithms">The output bitwise flags of signature algorithms extracted from the ClientHello message, if parsing is successful; otherwise, <see cref="TlsSignatureAlgorithms.None"/>.</param>
-	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
+	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static ClientHelloParseErrorCode TryParse
+	public static TlsClientHelloParseErrorCode TryParse
 	(
 		ReadOnlySequence<Byte> data,
 		out TlsSignatureAlgorithms signatureAlgorithms
@@ -226,7 +226,7 @@ public static class ClientHelloParser
 		if (data.IsEmpty)
 		{
 			signatureAlgorithms = TlsSignatureAlgorithms.None;
-			return ClientHelloParseErrorCode.DataIsEmpty;
+			return TlsClientHelloParseErrorCode.DataIsEmpty;
 		}
 
 		// Validate data.length
@@ -234,7 +234,7 @@ public static class ClientHelloParser
 		if (data.Length < 5)
 		{
 			signatureAlgorithms = TlsSignatureAlgorithms.None;
-			return ClientHelloParseErrorCode.DataLengthIsInvalid;
+			return TlsClientHelloParseErrorCode.DataLengthIsInvalid;
 		}
 
 		// Create reader
@@ -243,7 +243,7 @@ public static class ClientHelloParser
 		// TLSPlaintext record containing a Handshake message
 		var result = TryProcessRecord(ref reader, out var handshakeLength);
 
-		if (result != ClientHelloParseErrorCode.None)
+		if (result != TlsClientHelloParseErrorCode.None)
 		{
 			signatureAlgorithms = TlsSignatureAlgorithms.None;
 			return result;
@@ -252,7 +252,7 @@ public static class ClientHelloParser
 		// Handshake message containing a ClientHello message
 		result = TryProcessHandshake(ref reader, handshakeLength, out var clientHelloLength);
 
-		if (result != ClientHelloParseErrorCode.None)
+		if (result != TlsClientHelloParseErrorCode.None)
 		{
 			signatureAlgorithms = TlsSignatureAlgorithms.None;
 			return result;
@@ -274,9 +274,9 @@ public static class ClientHelloParser
 	/// <remarks>TLSPlaintext struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-5.1">RFC 8446 Section 5.1</see>.</remarks>
 	/// <param name="reader">The byte sequence reader.</param>
 	/// <param name="handshakeLength">The output length of the Handshake message payload as declared in the TLS record header, if parsing is successful; otherwise, zero.</param>
-	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
+	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static ClientHelloParseErrorCode TryProcessRecord
+	private static TlsClientHelloParseErrorCode TryProcessRecord
 	(
 		ref SequenceReader<Byte> reader,
 		out UInt16 handshakeLength
@@ -289,7 +289,7 @@ public static class ClientHelloParser
 		if (!reader.TryRead(out var type))
 		{
 			handshakeLength = default;
-			return ClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.DataReadError;
 		}
 
 		// Validate TLSPlaintext.type
@@ -297,7 +297,7 @@ public static class ClientHelloParser
 		if (type != ContentTypeHandshake)
 		{
 			handshakeLength = default;
-			return ClientHelloParseErrorCode.RecordField_Type_ValueIsNotHandshake;
+			return TlsClientHelloParseErrorCode.RecordField_Type_ValueIsNotHandshake;
 		}
 
 		// Skip TLSPlaintext.legacy_record_version, 2 bytes
@@ -306,18 +306,18 @@ public static class ClientHelloParser
 		// Read TLSPlaintext.length, 2 bytes
 		if (!reader.TryReadBigEndian(out handshakeLength))
 		{
-			return ClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.DataReadError;
 		}
 
 		// Validate TLSPlaintext.length
-		// must be at least as Handshake header size to contain a valid Handshake message
+		// must be at least the Handshake header size to contain a valid Handshake message
 		// must not exceed the remaining bytes in the reader
 		if ((handshakeLength < HandshakeHeaderSize) || (handshakeLength > reader.Remaining))
 		{
-			return ClientHelloParseErrorCode.RecordField_Length_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.RecordField_Length_ValueIsInvalid;
 		}
 
-		return ClientHelloParseErrorCode.None;
+		return TlsClientHelloParseErrorCode.None;
 	}
 
 	/// <summary>
@@ -327,9 +327,9 @@ public static class ClientHelloParser
 	/// <param name="reader">The byte sequence reader.</param>
 	/// <param name="handshakeLength">The Handshake message payload length declared in the TLS record header.</param>
 	/// <param name="clientHelloLength">The output length of the ClientHello message body as declared in the Handshake message header, if parsing is successful; otherwise, zero.</param>
-	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
+	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static ClientHelloParseErrorCode TryProcessHandshake
+	private static TlsClientHelloParseErrorCode TryProcessHandshake
 	(
 		ref SequenceReader<Byte> reader,
 		UInt32 handshakeLength,
@@ -343,7 +343,7 @@ public static class ClientHelloParser
 		if (!reader.TryRead(out var handshakeType))
 		{
 			clientHelloLength = default;
-			return ClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.DataReadError;
 		}
 
 		// Validate Handshake.msg_type
@@ -351,13 +351,13 @@ public static class ClientHelloParser
 		if (handshakeType != HandshakeTypeClientHello)
 		{
 			clientHelloLength = default;
-			return ClientHelloParseErrorCode.HandshakeField_MessageType_ValueIsNotClientHello;
+			return TlsClientHelloParseErrorCode.HandshakeField_MessageType_ValueIsNotClientHello;
 		}
 
 		// Read Handshake.length, 3 bytes
 		if (!reader.TryReadBigEndian24(out clientHelloLength))
 		{
-			return ClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.DataReadError;
 		}
 
 		// Validate Handshake.length
@@ -365,10 +365,10 @@ public static class ClientHelloParser
 		// must not exceed the remaining bytes in the Handshake message
 		if ((clientHelloLength < 41) || (clientHelloLength > handshakeLength - HandshakeHeaderSize))
 		{
-			return ClientHelloParseErrorCode.HandshakeField_Length_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.HandshakeField_Length_ValueIsInvalid;
 		}
 
-		return ClientHelloParseErrorCode.None;
+		return TlsClientHelloParseErrorCode.None;
 	}
 
 	/// <summary>
@@ -378,9 +378,9 @@ public static class ClientHelloParser
 	/// <param name="reader">The byte sequence reader instance from which the Handshake bytes are to be read.</param>
 	/// <param name="clientHelloLength">The ClientHello message body length declared in the Handshake header.</param>
 	/// <param name="signatureAlgorithms">The output bitwise flags of signature algorithms extracted from the ClientHello message, if parsing is successful; otherwise, <see cref="TlsSignatureAlgorithms.None"/>.</param>
-	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
+	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static ClientHelloParseErrorCode TryProcessClientHello
+	private static TlsClientHelloParseErrorCode TryProcessClientHello
 	(
 		ref SequenceReader<Byte> reader,
 		Int32 clientHelloLength,
@@ -395,7 +395,7 @@ public static class ClientHelloParser
 		// Read ClientHello.legacy_session_id.length, 1 byte
 		if (!reader.TryRead(out var legacySessionIdLength))
 		{
-			return ClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.DataReadError;
 		}
 
 		// Remaining length of the ClientHello body in bytes.
@@ -407,7 +407,7 @@ public static class ClientHelloParser
 		// must not exceed bytes remaining in the declared ClientHello body
 		if (remainingLength < 0 || legacySessionIdLength > 32)
 		{
-			return ClientHelloParseErrorCode.ClientHelloField_LegacySessionIdLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.ClientHelloField_LegacySessionIdLength_ValueIsInvalid;
 		}
 
 		// Skip ClientHello.legacy_session_id.data, length bytes
@@ -416,10 +416,10 @@ public static class ClientHelloParser
 		// Read ClientHello.cipher_suites.length, 2 bytes
 		if (!reader.TryReadBigEndian(out UInt16 cipherSuitesLength))
 		{
-			return ClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.DataReadError;
 		}
 
-		// Adjust remaning length
+		// Adjust remaining length
 		remainingLength -= cipherSuitesLength;
 
 		// Validate ClientHello.cipher_suites.length
@@ -427,20 +427,21 @@ public static class ClientHelloParser
 		// must not exceed bytes remaining in the declared ClientHello body
 		if (remainingLength < 0 || cipherSuitesLength == 0 || (cipherSuitesLength % 2) != 0)
 		{
-			return ClientHelloParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid;
 		}
 
 		// Read ClientHello.cipher_suites.data
-		for (var suiteIndex = 0; suiteIndex < cipherSuitesLength / 2; suiteIndex++)
+		var suiteCount = cipherSuitesLength / 2;
+		for (var suiteIndex = 0; suiteIndex < suiteCount; suiteIndex++)
 		{
 			// Read each cipher suite, 2 bytes
 			if (!reader.TryReadBigEndian(out UInt16 cipherSuite))
 			{
-				return ClientHelloParseErrorCode.DataReadError;
+				return TlsClientHelloParseErrorCode.DataReadError;
 			}
 
 			// Infer server auth algorithms from TLS 1.2 cipher suites.
-			if (tls12ServerAuthLookup.TryGetValue((TlsCipherSuite) cipherSuite, out var cipherSuiteSignatureAlgorithm))
+			if (tls12AuthSALookup.TryGetValue((TlsCipherSuite) cipherSuite, out var cipherSuiteSignatureAlgorithm))
 			{
 				signatureAlgorithms |= cipherSuiteSignatureAlgorithm;
 			}
@@ -450,34 +451,34 @@ public static class ClientHelloParser
 		// TLS 1.3 path: cipher suites do not encode auth algorithm; continue and parse signature_algorithms extension.
 		if (signatureAlgorithms != TlsSignatureAlgorithms.None)
 		{
-			return ClientHelloParseErrorCode.None;
+			return TlsClientHelloParseErrorCode.None;
 		}
 
 		// Read ClientHello.legacy_compression_methods.length, 1 byte
 		if (!reader.TryRead(out var legacyCompressionMethodsLength))
 		{
-			return ClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.DataReadError;
 		}
 
-		// Adjust remaning length
+		// Adjust remaining length
 		remainingLength -= legacyCompressionMethodsLength;
 
 		// Validate ClientHello.legacy_compression_methods.length
-		// must be betwen 1 and 255
+		// must be between 1 and 255
 		// must not exceed the remaining bytes in the declared ClientHello body
 		if (remainingLength < 0 || legacyCompressionMethodsLength < 1)
 		{
-			return ClientHelloParseErrorCode.ClientHelloField_LegacyCompressionMethodsLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.ClientHelloField_LegacyCompressionMethodsLength_ValueIsInvalid;
 		}
 
 		// Skip ClientHello.legacy_compression_methods.data, length bytes
 		reader.Advance(legacyCompressionMethodsLength);
 
 		// Check if end is reached
-		// If so than protocol is TLS 1.2 and no signature algorithms found.
+		// If so then protocol is TLS 1.2 and no signature algorithms found.
 		if (remainingLength == 0)
 		{
-			return ClientHelloParseErrorCode.None;
+			return TlsClientHelloParseErrorCode.None;
 		}
 
 		return TryProcessClientHelloExtensions(ref reader, remainingLength, ref signatureAlgorithms);
@@ -489,9 +490,9 @@ public static class ClientHelloParser
 	/// <param name="reader">The byte sequence reader instance from which the ClientHello extensions bytes are to be read.</param>
 	/// <param name="remainingLength">The remaining length of the ClientHello message body.</param>
 	/// <param name="signatureAlgorithms">The bitwise flags of signature algorithms extracted so far from the ClientHello message; will be updated with any additional algorithms found in the extensions.</param>
-	/// <returns>A <see cref="ClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
+	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static ClientHelloParseErrorCode TryProcessClientHelloExtensions
+	private static TlsClientHelloParseErrorCode TryProcessClientHelloExtensions
 	(
 		ref SequenceReader<Byte> reader,
 		Int32 remainingLength,
@@ -501,86 +502,107 @@ public static class ClientHelloParser
 		// Read ClientHello.extensions.length, 2 bytes
 		if (!reader.TryReadBigEndian(out UInt16 extensionsLength))
 		{
-			return ClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.DataReadError;
 		}
 
-		// Adjust remaning length
-		remainingLength -= 2 + extensionsLength;
+		// Adjust remaining length
+		remainingLength -= 2;
 
 		// Validate ClientHello.extensions.length
-		// must be betwen 8 and 65535
+		// must be between 8 and 65535
 		// must not exceed the remaining bytes in the declared ClientHello body
-		if (remainingLength < 0 || extensionsLength < 8)
+		if ((remainingLength - extensionsLength) < 0 || extensionsLength < 8)
 		{
-			return ClientHelloParseErrorCode.ClientHelloField_ExtensionsLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.ClientHelloField_ExtensionsLength_ValueIsInvalid;
 		}
 
-		UInt32 processedExtensionsLength = 0;
-
-		while (processedExtensionsLength < extensionsLength)
+		// Read ClientHello.extensions.data
+		while (remainingLength >= 0)
 		{
-			if (!reader.TryReadBigEndian(out UInt16 extensionType) || !reader.TryReadBigEndian(out UInt16 extensionDataLength))
+			// Read Extension.extension_type
+			if (!reader.TryReadBigEndian(out UInt16 extensionType))
 			{
-				return ClientHelloParseErrorCode.DataReadError;
+				return TlsClientHelloParseErrorCode.DataReadError;
 			}
 
-			processedExtensionsLength += 4;
-
-			if (processedExtensionsLength > extensionsLength || extensionDataLength > (extensionsLength - processedExtensionsLength))
+			// Read Extension.extension_data.length
+			if (!reader.TryReadBigEndian(out UInt16 extensionDataLength))
 			{
-				return ClientHelloParseErrorCode.DataReadError;
+				return TlsClientHelloParseErrorCode.DataReadError;
 			}
 
-			// signature_algorithms
+			// Adjust remaining length
+			remainingLength -= 4 + extensionDataLength;
+
+			// Validate Extension.extension_data.length
+			// must not exceed the remaining bytes in the extensions block
+			if (remainingLength < 0)
+			{
+				return TlsClientHelloParseErrorCode.ExtensionField_ExtensionDataLength_ValueIsInvalid;
+			}
+
+			// 13 is ExtensionType.signature_algorithms enum value according to RFC
 			if (extensionType == 13)
 			{
-				if (extensionDataLength < 2)
-				{
-					return ClientHelloParseErrorCode.DataReadError;
-				}
-
-				if (!reader.TryReadBigEndian(out UInt16 signatureSchemesListLength))
-				{
-					return ClientHelloParseErrorCode.DataReadError;
-				}
-
-				if (signatureSchemesListLength == 0 || (signatureSchemesListLength % 2) != 0 || signatureSchemesListLength != (extensionDataLength - 2))
-				{
-					return ClientHelloParseErrorCode.DataReadError;
-				}
-
-				for (var signatureSchemeIndex = 0; signatureSchemeIndex < signatureSchemesListLength / 2; signatureSchemeIndex++)
-				{
-					if (!reader.TryReadBigEndian(out UInt16 signatureScheme))
-					{
-						return ClientHelloParseErrorCode.DataReadError;
-					}
-
-					signatureAlgorithms |= GetSignatureAlgorithmsFromSignatureScheme(signatureScheme);
-				}
+				return TryProcessClientHelloExtensionSignatureAlgorithms(ref reader, ref remainingLength, ref signatureAlgorithms);
 			}
 			else
 			{
 				reader.Advance(extensionDataLength);
 			}
-
-			processedExtensionsLength += extensionDataLength;
 		}
 
-		if (processedExtensionsLength != extensionsLength)
-		{
-			return ClientHelloParseErrorCode.DataReadError;
-		}
-
-		return ClientHelloParseErrorCode.None;
+		return TlsClientHelloParseErrorCode.None;
 	}
 
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static TlsSignatureAlgorithms GetSignatureAlgorithmsFromSignatureScheme(UInt16 signatureScheme)
+	private static TlsClientHelloParseErrorCode TryProcessClientHelloExtensionSignatureAlgorithms
+	(
+		ref SequenceReader<Byte> reader,
+		ref Int32 remainingLength,
+		ref TlsSignatureAlgorithms signatureAlgorithms
+	)
 	{
-		return signatureSchemeLookup.TryGetValue(signatureScheme, out var signatureAlgorithms)
-			? signatureAlgorithms
-			: TlsSignatureAlgorithms.None;
+		if (remainingLength < 2)
+		{
+			return TlsClientHelloParseErrorCode.DataReadError;
+		}
+
+		// Read supported_signature_algorithms.length, 2 bytes
+		if (!reader.TryReadBigEndian(out UInt16 supportedSignatureAlgorithmsLength))
+		{
+			return TlsClientHelloParseErrorCode.DataReadError;
+		}
+
+		// Adjust remaining length
+		remainingLength -= 2 + supportedSignatureAlgorithmsLength;
+
+		// Validate supported_signature_algorithms.length
+		// must be non-zero and a multiple of 2, since each cipher suite is represented by 2 bytes
+		// must not exceed bytes remaining
+		if (remainingLength < 0 || supportedSignatureAlgorithmsLength == 0 || (supportedSignatureAlgorithmsLength % 2) != 0)
+		{
+			return TlsClientHelloParseErrorCode.Extension_SignatureAlgorithmField_SupportedSignatureAlgorithmsLength_ValueIsInvalid;
+		}
+
+		var count = supportedSignatureAlgorithmsLength / 2;
+
+		// Read supported_signature_algorithms.data
+		for (var index = 0; index < count; index++)
+		{
+			// Read item
+			if (!reader.TryReadBigEndian(out UInt16 signatureScheme))
+			{
+				return TlsClientHelloParseErrorCode.DataReadError;
+			}
+
+			// Try get signature algorithm
+			if (tls13AuthSALookup.TryGetValue(signatureScheme, out var signatureAlgorithm))
+			{
+				signatureAlgorithms |= signatureAlgorithm;
+			}
+		}
+
+		return TlsClientHelloParseErrorCode.None;
 	}
 
 	#endregion

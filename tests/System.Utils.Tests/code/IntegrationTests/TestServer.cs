@@ -103,9 +103,9 @@ internal sealed class TestServer
 
 	private static void OnTlsClientHelloBytes(ConnectionContext connectionContext, ReadOnlySequence<Byte> data)
 	{
-		var cipherSuitParseResult = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
+		var cipherSuitParseResult = TlsClientHelloParser.TryParse(data, out var signatureAlgorithms);
 
-		if (cipherSuitParseResult == ClientHelloParseErrorCode.None)
+		if (cipherSuitParseResult == TlsClientHelloParseErrorCode.None)
 		{
 			connectionContext.Items[ConnectionContextItemsKeySignatureAlgorithmsName] = signatureAlgorithms;
 		}

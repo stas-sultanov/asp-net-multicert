@@ -1,7 +1,7 @@
 // Authored by Stas Sultanov
 // Copyright © Stas Sultanov
 
-namespace System.UtilsTests.code.UnitTests;
+namespace System.Utils.UnitTests;
 
 using System.Buffers;
 
@@ -9,7 +9,7 @@ using System.Buffers;
 /// Unit tests for <see cref="SequenceReaderExtensions"/> methods that read unsigned integers.
 /// </summary>
 [TestClass]
-public sealed class SequenceReaderExtensionsUnsignedTests
+public sealed class SequenceReaderAdvanceExtensionsTests
 {
 	[TestMethod]
 	public void TryReadBigEndian_ShouldNotLoseData_WhenSignedValueIsConvertedToUInt16()

@@ -4,9 +4,9 @@
 namespace System.Net.Security;
 
 /// <summary>
-/// Defines error codes for the <see cref="ClientHelloParser.TryParse"/> method.
+/// Defines error codes for the <see cref="TlsClientHelloParser.TryParse"/> method.
 /// </summary>
-public enum ClientHelloParseErrorCode
+public enum TlsClientHelloParseErrorCode
 {
 	/// <summary>
 	/// No error occurred, and the cipher suites were successfully parsed from the input data.
@@ -66,5 +66,15 @@ public enum ClientHelloParseErrorCode
 	/// <summary>
 	/// The ClientHello.extensions.length field value is invalid.
 	/// </summary>
-	ClientHelloField_ExtensionsLength_ValueIsInvalid = 0x0341
+	ClientHelloField_ExtensionsLength_ValueIsInvalid = 0x0341,
+
+	/// <summary>
+	/// The Extension.extension_data.length field value is invalid.
+	/// </summary>
+	ExtensionField_ExtensionDataLength_ValueIsInvalid = 0x0411,
+
+	/// <summary>
+	/// The supported_signature_algorithms.length field value is invalid.
+	/// </summary>
+	Extension_SignatureAlgorithmField_SupportedSignatureAlgorithmsLength_ValueIsInvalid = 0x0421
 }
