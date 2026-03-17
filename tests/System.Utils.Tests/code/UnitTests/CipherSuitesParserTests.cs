@@ -43,14 +43,10 @@ public sealed class CipherSuitesParserTests
 	[TestMethod]
 	public void TryParse_Fail_If_RecordField_Type_ValueIsNotHandshake()
 	{
+		// content must be 0x16 (handshake).
 		var record = BuildTLSPlaintext(0, 0x0303, 0, []);
 
-		var data = new ReadOnlySequence<Byte>(record);
-
-		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
-
-		Assert.AreEqual(ClientHelloParseErrorCode.RecordField_Type_ValueIsNotHandshake, result);
-		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
+		TestTryParseRecord(record, ClientHelloParseErrorCode.RecordField_Type_ValueIsNotHandshake);
 	}
 
 	[TestMethod]
@@ -59,12 +55,7 @@ public sealed class CipherSuitesParserTests
 		// Minimum valid handshake length is 4 bytes for the handshake header, so declare less than that.
 		var record = BuildTLSPlaintext(0x16, 0x0303, 3, []);
 
-		var data = new ReadOnlySequence<Byte>(record);
-
-		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
-
-		Assert.AreEqual(ClientHelloParseErrorCode.RecordField_Length_ValueIsInvalid, result);
-		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
+		TestTryParseRecord(record, ClientHelloParseErrorCode.RecordField_Length_ValueIsInvalid);
 	}
 
 	[TestMethod]
@@ -73,12 +64,7 @@ public sealed class CipherSuitesParserTests
 		// Handshake header is 4 bytes, so declare length greater than actual payload to trigger length validation failure.
 		var record = BuildTLSPlaintext(0x16, 0x0303, 5, new Byte[4]);
 
-		var data = new ReadOnlySequence<Byte>(record);
-
-		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
-
-		Assert.AreEqual(ClientHelloParseErrorCode.RecordField_Length_ValueIsInvalid, result);
-		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
+		TestTryParseRecord(record, ClientHelloParseErrorCode.RecordField_Length_ValueIsInvalid);
 	}
 
 	#endregion
@@ -90,14 +76,8 @@ public sealed class CipherSuitesParserTests
 	{
 		// Build a handshake with msg_type set to 0x02 (server_hello) instead of 0x01 (client_hello).
 		var handshake = BuildHandshake(0x02, 0, []);
-		var record = BuildTlsPlaintextWithHandshake(handshake);
 
-		var data = new ReadOnlySequence<Byte>(record);
-
-		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
-
-		Assert.AreEqual(ClientHelloParseErrorCode.HandshakeField_MessageType_ValueIsNotClientHello, result);
-		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
+		TestTryParseHandshake(handshake, ClientHelloParseErrorCode.HandshakeField_MessageType_ValueIsNotClientHello);
 	}
 
 	[TestMethod]
@@ -105,28 +85,16 @@ public sealed class CipherSuitesParserTests
 	{
 		// Minimum valid ClientHello length is 41 bytes
 		var handshake = BuildHandshake(0x01, 40, []);
-		var record = BuildTlsPlaintextWithHandshake(handshake);
 
-		var data = new ReadOnlySequence<Byte>(record);
-
-		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
-
-		Assert.AreEqual(ClientHelloParseErrorCode.HandshakeField_Length_ValueIsInvalid, result);
-		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
+		TestTryParseHandshake(handshake, ClientHelloParseErrorCode.HandshakeField_Length_ValueIsInvalid);
 	}
 
 	[TestMethod]
 	public void TryParse_Fail_If_HandshakeField_Length_ValueExceedsHandshakePayload()
 	{
 		var handshake = BuildHandshake(0x01, 50, []);
-		var record = BuildTlsPlaintextWithHandshake(handshake);
 
-		var data = new ReadOnlySequence<Byte>(record);
-
-		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
-
-		Assert.AreEqual(ClientHelloParseErrorCode.HandshakeField_Length_ValueIsInvalid, result);
-		Assert.AreEqual(TlsSignatureAlgorithms.None, signatureAlgorithms);
+		TestTryParseHandshake(handshake, ClientHelloParseErrorCode.HandshakeField_Length_ValueIsInvalid);
 	}
 
 	#endregion
@@ -138,7 +106,7 @@ public sealed class CipherSuitesParserTests
 	{
 		var clientHello = BuildClientHelloTls12(0x0303, 33, [], 2, [0, 0], 1, [0]);
 
-		TryParse_ClientHelloField(clientHello, ClientHelloParseErrorCode.ClientHelloField_LegacySessionIdLength_ValueIsInvalid);
+		TestTryParseClientHello(clientHello, ClientHelloParseErrorCode.ClientHelloField_LegacySessionIdLength_ValueIsInvalid);
 	}
 
 	[TestMethod]
@@ -146,7 +114,7 @@ public sealed class CipherSuitesParserTests
 	{
 		var clientHello = BuildClientHelloTls12(0x0303, 0, [], 0, [], 10, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
-		TryParse_ClientHelloField(clientHello, ClientHelloParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid);
+		TestTryParseClientHello(clientHello, ClientHelloParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid);
 	}
 
 	[TestMethod]
@@ -154,7 +122,7 @@ public sealed class CipherSuitesParserTests
 	{
 		var clientHello = BuildClientHelloTls12(0x0303, 0, [], 3, [1, 2, 3], 1, [0]);
 
-		TryParse_ClientHelloField(clientHello, ClientHelloParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid);
+		TestTryParseClientHello(clientHello, ClientHelloParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid);
 	}
 
 	[TestMethod]
@@ -162,7 +130,7 @@ public sealed class CipherSuitesParserTests
 	{
 		var clientHello = BuildClientHelloTls12(0x0303, 0, [], 2, [0, 0], 0, [0]);
 
-		TryParse_ClientHelloField(clientHello, ClientHelloParseErrorCode.ClientHelloField_LegacyCompressionMethodsLength_ValueIsInvalid);
+		TestTryParseClientHello(clientHello, ClientHelloParseErrorCode.ClientHelloField_LegacyCompressionMethodsLength_ValueIsInvalid);
 	}
 
 	[TestMethod]
@@ -170,7 +138,7 @@ public sealed class CipherSuitesParserTests
 	{
 		var clientHello = BuildClientHelloTls12(0x0303, 0, [], 2, [0, 0], 2, [0]);
 
-		TryParse_ClientHelloField(clientHello, ClientHelloParseErrorCode.ClientHelloField_LegacyCompressionMethodsLength_ValueIsInvalid);
+		TestTryParseClientHello(clientHello, ClientHelloParseErrorCode.ClientHelloField_LegacyCompressionMethodsLength_ValueIsInvalid);
 	}
 
 	[TestMethod]
@@ -178,7 +146,7 @@ public sealed class CipherSuitesParserTests
 	{
 		var clientHello = BuildClientHelloTls13(0x0303, 0, [], 2, [0, 0], 2, [0], 7, [0, 1, 2, 3, 4, 5, 6, 7]);
 
-		TryParse_ClientHelloField(clientHello, ClientHelloParseErrorCode.ClientHelloField_ExtensionsLength_ValueIsInvalid);
+		TestTryParseClientHello(clientHello, ClientHelloParseErrorCode.ClientHelloField_ExtensionsLength_ValueIsInvalid);
 	}
 
 	[TestMethod]
@@ -186,7 +154,7 @@ public sealed class CipherSuitesParserTests
 	{
 		var clientHello = BuildClientHelloTls13(0x0303, 0, [], 2, [0, 0], 2, [0], 9, [0, 1, 2, 3, 4, 5, 6, 7]);
 
-		TryParse_ClientHelloField(clientHello, ClientHelloParseErrorCode.ClientHelloField_ExtensionsLength_ValueIsInvalid);
+		TestTryParseClientHello(clientHello, ClientHelloParseErrorCode.ClientHelloField_ExtensionsLength_ValueIsInvalid);
 	}
 
 	[TestMethod]
@@ -201,7 +169,22 @@ public sealed class CipherSuitesParserTests
 
 		var clientHello = BuildClientHelloTls12(expectedCipherSuites);
 
-		TryParse_ClientHelloField(clientHello, ClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
+		TestTryParseClientHello(clientHello, ClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
+	}
+
+	[TestMethod]
+	public void TryParse_Succeed_If_ClientHello_IsValidWithAlgorithm()
+	{
+		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.RSA | TlsSignatureAlgorithms.ECDSA;
+		var expectedCipherSuites = new TlsCipherSuite []
+		{
+			TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+			TlsCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA256
+		};
+
+		var clientHello = BuildClientHelloTls12(expectedCipherSuites);
+
+		TestTryParseClientHello(clientHello, ClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
 	}
 
 	#endregion
@@ -209,21 +192,54 @@ public sealed class CipherSuitesParserTests
 	#region Helper Methods
 
 	/// <summary>
-	/// A helper method to build TLS record bytes with controllable ClientHello body and invoke the parser, asserting expected results.
+	/// A helper method to try parse ClientHello bytes.
 	/// </summary>
 	/// <param name="clientHello">The ClientHello bytes to parse.</param>
 	/// <param name="expectedErrorCode">The expected error code from the parser.</param>
 	/// <param name="expectedSignatureAlgorithms">The expected signature algorithms from the parser.</param>
-	private static void TryParse_ClientHelloField
+	private static void TestTryParseClientHello
 	(
 		Byte[] clientHello,
 		ClientHelloParseErrorCode expectedErrorCode = ClientHelloParseErrorCode.None,
 		TlsSignatureAlgorithms expectedSignatureAlgorithms = TlsSignatureAlgorithms.None
 	)
 	{
-		var handshake = BuildHandshakeWithClientHelo(clientHello);
+		var handshake = BuildHandshakeWithClientHello(clientHello);
+
+		TestTryParseHandshake(handshake, expectedErrorCode, expectedSignatureAlgorithms);
+	}
+
+	/// <summary>
+	/// A helper method to try parse Handshake bytes.
+	/// </summary>
+	/// <param name="handshake">The TLS handshake bytes to parse.</param>
+	/// <param name="expectedErrorCode">The expected error code from the parser.</param>
+	/// <param name="expectedSignatureAlgorithms">The expected signature algorithms from the parser.</param>
+	private static void TestTryParseHandshake
+	(
+		Byte[] handshake,
+		ClientHelloParseErrorCode expectedErrorCode = ClientHelloParseErrorCode.None,
+		TlsSignatureAlgorithms expectedSignatureAlgorithms = TlsSignatureAlgorithms.None
+	)
+	{
 		var record = BuildTlsPlaintextWithHandshake(handshake);
 
+		TestTryParseRecord(record, expectedErrorCode, expectedSignatureAlgorithms);
+	}
+
+	/// <summary>
+	/// A helper method to try parse TLS record bytes.
+	/// </summary>
+	/// <param name="record">The TLS record bytes to parse.</param>
+	/// <param name="expectedErrorCode">The expected error code from the parser.</param>
+	/// <param name="expectedSignatureAlgorithms">The expected signature algorithms from the parser.</param>
+	private static void TestTryParseRecord
+	(
+		Byte[] record,
+		ClientHelloParseErrorCode expectedErrorCode = ClientHelloParseErrorCode.None,
+		TlsSignatureAlgorithms expectedSignatureAlgorithms = TlsSignatureAlgorithms.None
+	)
+	{
 		var data = new ReadOnlySequence<Byte>(record);
 
 		var result = ClientHelloParser.TryParse(data, out var signatureAlgorithms);
@@ -359,7 +375,7 @@ public sealed class CipherSuitesParserTests
 	/// <remarks>Handshake struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.1">RFC 8446 Section 4.1</see>.</remarks>
 	/// <param name="clientHello">The ClientHello body bytes to place in the Handshake message body.</param>
 	/// <returns>Complete Handshake bytes with ClientHello as the message body.</returns>
-	private static Byte[] BuildHandshakeWithClientHelo
+	private static Byte[] BuildHandshakeWithClientHello
 	(
 		Byte[] clientHello
 	)
