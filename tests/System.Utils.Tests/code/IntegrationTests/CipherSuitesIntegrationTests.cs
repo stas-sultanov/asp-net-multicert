@@ -10,65 +10,51 @@ using System.Runtime.Versioning;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 
+/// <summary>
+/// Integration tests for TLS cipher suite certificate selection.
+/// </summary>
 [SupportedOSPlatform("linux")]
 [TestClass]
 public sealed class CipherSuitesIntegrationTests
 {
 	#region Fields
 
-	public TestContext TestContext { get; set; }
-	private const String PublicKeyOidRsa = "1.2.840.113549.1.1.1";
 	private const String PublicKeyOidEcPublicKey = "1.2.840.10045.2.1";
+	private const String PublicKeyOidRsa = "1.2.840.113549.1.1.1";
 
 	#endregion
 
-	[TestMethod]
-	public async Task Server_Success_WhenOfferRightCertificate_TLS12_RSA()
-	{
-		await ServerShouldPresentRightCertificate(SslProtocols.Tls12, TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.RSA);
-	}
+	public TestContext TestContext { get; set; }
+
+	#region Test Methods: Success
 
 	[TestMethod]
-	public async Task Server_Success_WhenOfferRightCertificate_TLS12_ECDSA()
+	public async Task Server_PresentRightCertificate_If_Tls12_RsaCipherSuite()
 	{
-		await ServerShouldPresentRightCertificate(SslProtocols.Tls12, TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA);
+		await TestServerPresentsRightCertificate(SslProtocols.Tls12, TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.RSA);
 	}
 
 	[TestMethod]
-	public async Task Server_Success_WhenOfferRightCertificate_TLS13_ECDSA()
+	public async Task Server_PresentRightCertificate_If_Tls12_EcdsaCipherSuite()
 	{
-		await ServerShouldPresentRightCertificate(SslProtocols.Tls13, TlsCipherSuite.TLS_AES_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA);
+		await TestServerPresentsRightCertificate(SslProtocols.Tls12, TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA);
 	}
 
-	public async Task ServerShouldPresentRightCertificate
-	(
-		SslProtocols protocol,
-		TlsCipherSuite cipherSuite,
-		TlsSignatureAlgorithms expectedSignatureAlgorithm
-	)
+	[TestMethod]
+	public async Task Server_PresentRightCertificate_If_Tls13_EcdsaCipherSuite()
 	{
-		var port = GetFreeTcpPort();
-
-		// Create server.
-		var server = new TestServer();
-
-		// Build server application.
-		using var serverApplication = server.Build(port, SslProtocols.Tls12 | SslProtocols.Tls13);
-
-		// Start listening for incoming connections.
-		await serverApplication.StartAsync(TestContext.CancellationToken);
-
-		// Connect to the server with a client configured to use the expected cipher suite.
-		var actualCertificateKeyType = await ConnectAndGetInfo(port, protocol, [cipherSuite], TestContext.CancellationToken);
-
-		// Stop the server application.
-		await serverApplication.StopAsync(TestContext.CancellationToken);
-
-		//Assert.AreEqual(expectedCertificateKeyType, actualCertificateKeyType);
+		await TestServerPresentsRightCertificate(SslProtocols.Tls13, TlsCipherSuite.TLS_AES_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA);
 	}
 
+	#endregion
+
+	#region Helper Methods
+
+	/// <summary>
+	/// A helper method to connect to the server and retrieve the signature algorithm of the presented certificate.
+	/// </summary>
 	[Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5359:Do Not Disable Certificate Validation", Justification = "<Pending>")]
-	private async Task<TlsSignatureAlgorithms> ConnectAndGetInfo
+	private async Task<TlsSignatureAlgorithms> ConnectAndGetCertificateSignatureAlgorithm
 	(
 		Int32 port,
 		SslProtocols protocol,
@@ -108,12 +94,11 @@ public sealed class CipherSuitesIntegrationTests
 		}
 
 		var serverCertificate = new X509Certificate2(sslStream.RemoteCertificate);
-		var serverCertificateKeyType = GetCertificateKeyType(serverCertificate);
 
-		return serverCertificateKeyType;
+		return GetCertificateSignatureAlgorithm(serverCertificate);
 	}
 
-	private static TlsSignatureAlgorithms GetCertificateKeyType(X509Certificate2 certificate)
+	private static TlsSignatureAlgorithms GetCertificateSignatureAlgorithm(X509Certificate2 certificate)
 	{
 		var publicKeyOid = certificate.PublicKey.Oid?.Value;
 
@@ -133,4 +118,36 @@ public sealed class CipherSuitesIntegrationTests
 		listener.Stop();
 		return port;
 	}
+
+	/// <summary>
+	/// A helper method to verify that the server presents the right certificate based on the offered cipher suite.
+	/// </summary>
+	private async Task TestServerPresentsRightCertificate
+	(
+		SslProtocols protocol,
+		TlsCipherSuite cipherSuite,
+		TlsSignatureAlgorithms expectedSignatureAlgorithm
+	)
+	{
+		var port = GetFreeTcpPort();
+
+		// Create server.
+		var server = new TestServer();
+
+		// Build server application.
+		using var serverApplication = server.Build(port, SslProtocols.Tls12 | SslProtocols.Tls13);
+
+		// Start listening for incoming connections.
+		await serverApplication.StartAsync(TestContext.CancellationToken);
+
+		// Connect to the server with a client configured to use the expected cipher suite.
+		var actualSignatureAlgorithm = await ConnectAndGetCertificateSignatureAlgorithm(port, protocol, [cipherSuite], TestContext.CancellationToken);
+
+		// Stop the server application.
+		await serverApplication.StopAsync(TestContext.CancellationToken);
+
+		Assert.AreEqual(expectedSignatureAlgorithm, actualSignatureAlgorithm);
+	}
+
+	#endregion
 }
