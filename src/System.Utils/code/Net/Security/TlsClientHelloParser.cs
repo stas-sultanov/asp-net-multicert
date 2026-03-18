@@ -184,25 +184,23 @@ public static class TlsClientHelloParser
 	/// <summary>
 	/// TLS 1.3 lookup table to infer server authentication signature algorithms from the signature_algorithms extension advertised in ClientHello.
 	/// </summary>
-	private static readonly FrozenDictionary<UInt16, TlsSignatureAlgorithms> tls13AuthSALookup
-		= new Dictionary<UInt16, TlsSignatureAlgorithms>
+	private static readonly FrozenDictionary<TlsSignatureScheme, TlsSignatureAlgorithms> tls13AuthSALookup
+		= new Dictionary<TlsSignatureScheme, TlsSignatureAlgorithms>
 	{
-		{ 0x0201, TlsSignatureAlgorithms.RSA },
-		{ 0x0301, TlsSignatureAlgorithms.RSA },
-		{ 0x0401, TlsSignatureAlgorithms.RSA },
-		{ 0x0501, TlsSignatureAlgorithms.RSA },
-		{ 0x0601, TlsSignatureAlgorithms.RSA },
-		{ 0x0804, TlsSignatureAlgorithms.RSA },
-		{ 0x0805, TlsSignatureAlgorithms.RSA },
-		{ 0x0806, TlsSignatureAlgorithms.RSA },
-		{ 0x0809, TlsSignatureAlgorithms.RSA },
-		{ 0x080A, TlsSignatureAlgorithms.RSA },
-		{ 0x080B, TlsSignatureAlgorithms.RSA },
-		{ 0x0203, TlsSignatureAlgorithms.ECDSA },
-		{ 0x0303, TlsSignatureAlgorithms.ECDSA },
-		{ 0x0403, TlsSignatureAlgorithms.ECDSA },
-		{ 0x0503, TlsSignatureAlgorithms.ECDSA },
-		{ 0x0603, TlsSignatureAlgorithms.ECDSA },
+		{ TlsSignatureScheme.ecdsa_secp256r1_sha256, TlsSignatureAlgorithms.ECDSA },
+		{ TlsSignatureScheme.ecdsa_secp384r1_sha384, TlsSignatureAlgorithms.ECDSA },
+		{ TlsSignatureScheme.ecdsa_secp521r1_sha512, TlsSignatureAlgorithms.ECDSA },
+		{ TlsSignatureScheme.ecdsa_sha1,             TlsSignatureAlgorithms.ECDSA },
+		{ TlsSignatureScheme.rsa_pkcs1_sha1,         TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pkcs1_sha256,       TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pkcs1_sha384,       TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pkcs1_sha512,       TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_pss_sha256,     TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_pss_sha384,     TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_pss_sha512,     TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_rsae_sha256,    TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_rsae_sha384,    TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_rsae_sha512,    TlsSignatureAlgorithms.RSA },
 	}.ToFrozenDictionary();
 
 	#endregion
@@ -226,7 +224,7 @@ public static class TlsClientHelloParser
 		if (data.IsEmpty)
 		{
 			signatureAlgorithms = TlsSignatureAlgorithms.None;
-			return TlsClientHelloParseErrorCode.DataIsEmpty;
+			return TlsClientHelloParseErrorCode.Data_IsEmpty;
 		}
 
 		// Validate data.length
@@ -234,7 +232,7 @@ public static class TlsClientHelloParser
 		if (data.Length < 5)
 		{
 			signatureAlgorithms = TlsSignatureAlgorithms.None;
-			return TlsClientHelloParseErrorCode.DataLengthIsInvalid;
+			return TlsClientHelloParseErrorCode.Data_LengthIsInvalid;
 		}
 
 		// Create reader
@@ -289,7 +287,7 @@ public static class TlsClientHelloParser
 		if (!reader.TryRead(out var type))
 		{
 			handshakeLength = default;
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Validate TLSPlaintext.type
@@ -297,7 +295,7 @@ public static class TlsClientHelloParser
 		if (type != ContentTypeHandshake)
 		{
 			handshakeLength = default;
-			return TlsClientHelloParseErrorCode.RecordField_Type_ValueIsNotHandshake;
+			return TlsClientHelloParseErrorCode.Record_Type_ValueIsNotHandshake;
 		}
 
 		// Skip TLSPlaintext.legacy_record_version, 2 bytes
@@ -306,7 +304,7 @@ public static class TlsClientHelloParser
 		// Read TLSPlaintext.length, 2 bytes
 		if (!reader.TryReadBigEndian(out handshakeLength))
 		{
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Validate TLSPlaintext.length
@@ -314,7 +312,7 @@ public static class TlsClientHelloParser
 		// must not exceed the remaining bytes in the reader
 		if ((handshakeLength < HandshakeHeaderSize) || (handshakeLength > reader.Remaining))
 		{
-			return TlsClientHelloParseErrorCode.RecordField_Length_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.Record_Length_ValueIsInvalid;
 		}
 
 		return TlsClientHelloParseErrorCode.None;
@@ -343,7 +341,7 @@ public static class TlsClientHelloParser
 		if (!reader.TryRead(out var handshakeType))
 		{
 			clientHelloLength = default;
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Validate Handshake.msg_type
@@ -351,13 +349,13 @@ public static class TlsClientHelloParser
 		if (handshakeType != HandshakeTypeClientHello)
 		{
 			clientHelloLength = default;
-			return TlsClientHelloParseErrorCode.HandshakeField_MessageType_ValueIsNotClientHello;
+			return TlsClientHelloParseErrorCode.Handshake_MessageType_ValueIsNotClientHello;
 		}
 
 		// Read Handshake.length, 3 bytes
 		if (!reader.TryReadBigEndian24(out clientHelloLength))
 		{
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Validate Handshake.length
@@ -365,7 +363,7 @@ public static class TlsClientHelloParser
 		// must not exceed the remaining bytes in the Handshake message
 		if ((clientHelloLength < 41) || (clientHelloLength > handshakeLength - HandshakeHeaderSize))
 		{
-			return TlsClientHelloParseErrorCode.HandshakeField_Length_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.Handshake_Length_ValueIsInvalid;
 		}
 
 		return TlsClientHelloParseErrorCode.None;
@@ -395,7 +393,7 @@ public static class TlsClientHelloParser
 		// Read ClientHello.legacy_session_id.length, 1 byte
 		if (!reader.TryRead(out var legacySessionIdLength))
 		{
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Remaining length of the ClientHello body in bytes.
@@ -407,7 +405,7 @@ public static class TlsClientHelloParser
 		// must not exceed bytes remaining in the declared ClientHello body
 		if (remainingLength < 0 || legacySessionIdLength > 32)
 		{
-			return TlsClientHelloParseErrorCode.ClientHelloField_LegacySessionIdLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.ClientHello_LegacySessionIdLength_ValueIsInvalid;
 		}
 
 		// Skip ClientHello.legacy_session_id.data, length bytes
@@ -416,7 +414,7 @@ public static class TlsClientHelloParser
 		// Read ClientHello.cipher_suites.length, 2 bytes
 		if (!reader.TryReadBigEndian(out UInt16 cipherSuitesLength))
 		{
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Adjust remaining length
@@ -427,7 +425,7 @@ public static class TlsClientHelloParser
 		// must not exceed bytes remaining in the declared ClientHello body
 		if (remainingLength < 0 || cipherSuitesLength == 0 || (cipherSuitesLength % 2) != 0)
 		{
-			return TlsClientHelloParseErrorCode.ClientHelloField_CipherSuitesLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.ClientHello_CipherSuitesLength_ValueIsInvalid;
 		}
 
 		// Read ClientHello.cipher_suites.data
@@ -437,7 +435,7 @@ public static class TlsClientHelloParser
 			// Read each cipher suite, 2 bytes
 			if (!reader.TryReadBigEndian(out UInt16 cipherSuite))
 			{
-				return TlsClientHelloParseErrorCode.DataReadError;
+				return TlsClientHelloParseErrorCode.ReadError;
 			}
 
 			// Infer server auth algorithms from TLS 1.2 cipher suites.
@@ -457,7 +455,7 @@ public static class TlsClientHelloParser
 		// Read ClientHello.legacy_compression_methods.length, 1 byte
 		if (!reader.TryRead(out var legacyCompressionMethodsLength))
 		{
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Adjust remaining length
@@ -468,7 +466,7 @@ public static class TlsClientHelloParser
 		// must not exceed the remaining bytes in the declared ClientHello body
 		if (remainingLength < 0 || legacyCompressionMethodsLength < 1)
 		{
-			return TlsClientHelloParseErrorCode.ClientHelloField_LegacyCompressionMethodsLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.ClientHello_LegacyCompressionMethodsLength_ValueIsInvalid;
 		}
 
 		// Skip ClientHello.legacy_compression_methods.data, length bytes
@@ -502,7 +500,7 @@ public static class TlsClientHelloParser
 		// Read ClientHello.extensions.length, 2 bytes
 		if (!reader.TryReadBigEndian(out UInt16 extensionsLength))
 		{
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Adjust remaining length
@@ -513,7 +511,7 @@ public static class TlsClientHelloParser
 		// must not exceed the remaining bytes in the declared ClientHello body
 		if ((remainingLength - extensionsLength) < 0 || extensionsLength < 8)
 		{
-			return TlsClientHelloParseErrorCode.ClientHelloField_ExtensionsLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.ClientHello_ExtensionsLength_ValueIsInvalid;
 		}
 
 		// Read ClientHello.extensions.data
@@ -522,13 +520,13 @@ public static class TlsClientHelloParser
 			// Read Extension.extension_type
 			if (!reader.TryReadBigEndian(out UInt16 extensionType))
 			{
-				return TlsClientHelloParseErrorCode.DataReadError;
+				return TlsClientHelloParseErrorCode.ReadError;
 			}
 
 			// Read Extension.extension_data.length
 			if (!reader.TryReadBigEndian(out UInt16 extensionDataLength))
 			{
-				return TlsClientHelloParseErrorCode.DataReadError;
+				return TlsClientHelloParseErrorCode.ReadError;
 			}
 
 			// Adjust remaining length
@@ -538,7 +536,7 @@ public static class TlsClientHelloParser
 			// must not exceed the remaining bytes in the extensions block
 			if (remainingLength < 0)
 			{
-				return TlsClientHelloParseErrorCode.ExtensionField_ExtensionDataLength_ValueIsInvalid;
+				return TlsClientHelloParseErrorCode.Extension_ExtensionDataLength_ValueIsInvalid;
 			}
 
 			// 13 is ExtensionType.signature_algorithms enum value according to RFC
@@ -564,13 +562,13 @@ public static class TlsClientHelloParser
 	{
 		if (remainingLength < 2)
 		{
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Read supported_signature_algorithms.length, 2 bytes
 		if (!reader.TryReadBigEndian(out UInt16 supportedSignatureAlgorithmsLength))
 		{
-			return TlsClientHelloParseErrorCode.DataReadError;
+			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
 		// Adjust remaining length
@@ -581,7 +579,7 @@ public static class TlsClientHelloParser
 		// must not exceed bytes remaining
 		if (remainingLength < 0 || supportedSignatureAlgorithmsLength == 0 || (supportedSignatureAlgorithmsLength % 2) != 0)
 		{
-			return TlsClientHelloParseErrorCode.Extension_SignatureAlgorithmField_SupportedSignatureAlgorithmsLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.SignatureAlgorithm_SupportedSignatureAlgorithmsLength_ValueIsInvalid;
 		}
 
 		var count = supportedSignatureAlgorithmsLength / 2;
@@ -592,11 +590,11 @@ public static class TlsClientHelloParser
 			// Read item
 			if (!reader.TryReadBigEndian(out UInt16 signatureScheme))
 			{
-				return TlsClientHelloParseErrorCode.DataReadError;
+				return TlsClientHelloParseErrorCode.ReadError;
 			}
 
 			// Try get signature algorithm
-			if (tls13AuthSALookup.TryGetValue(signatureScheme, out var signatureAlgorithm))
+			if (tls13AuthSALookup.TryGetValue((TlsSignatureScheme) signatureScheme, out var signatureAlgorithm))
 			{
 				signatureAlgorithms |= signatureAlgorithm;
 			}

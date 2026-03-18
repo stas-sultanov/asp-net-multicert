@@ -9,72 +9,82 @@ namespace System.Net.Security;
 public enum TlsClientHelloParseErrorCode
 {
 	/// <summary>
-	/// No error occurred, and the cipher suites were successfully parsed from the input data.
+	/// No error occurred.
 	/// </summary>
 	None = 0x0000,
 
 	/// <summary>
+	/// An error occurred while reading the data.
+	/// </summary>
+	ReadError = 0x0001,
+
+	/// <summary>
 	/// The input data is empty, so there is no TLS record to parse.
 	/// </summary>
-	DataIsEmpty = 0x0001,
+	Data_IsEmpty = ErrorCodeGroup.Data | 0x01,
 
 	/// <summary>
 	/// The input data length is invalid.
 	/// </summary>
-	DataLengthIsInvalid = 0x0002,
-
-	/// <summary>
-	/// An error occurred while reading the input data.
-	/// </summary>
-	DataReadError = 0x0003,
+	Data_LengthIsInvalid = ErrorCodeGroup.Data | 0x02,
 
 	/// <summary>
 	/// The TLSPlaintext.length field value is invalid.
 	/// </summary>
-	RecordField_Length_ValueIsInvalid = 0x0111,
+	Record_Length_ValueIsInvalid = ErrorCodeGroup.Record | 0x01,
 
 	/// <summary>
 	/// The TLSPlaintext.type field value is not ContentType.handshake.
 	/// </summary>
-	RecordField_Type_ValueIsNotHandshake = 0x0122,
+	Record_Type_ValueIsNotHandshake = ErrorCodeGroup.Record | 0x02,
 
 	/// <summary>
 	/// The Handshake.msg_type field value is not HandshakeType.client_hello.
 	/// </summary>
-	HandshakeField_MessageType_ValueIsNotClientHello = 0x0212,
+	Handshake_MessageType_ValueIsNotClientHello = ErrorCodeGroup.Handshake | 0x01,
 
 	/// <summary>
 	/// The Handshake.length field value is invalid.
 	/// </summary>
-	HandshakeField_Length_ValueIsInvalid = 0x0221,
+	Handshake_Length_ValueIsInvalid = ErrorCodeGroup.Handshake | 0x02,
 
 	/// <summary>
 	/// The ClientHello.legacy_session_id.length field value is invalid.
 	/// </summary>
-	ClientHelloField_LegacySessionIdLength_ValueIsInvalid = 0x0311,
+	ClientHello_LegacySessionIdLength_ValueIsInvalid = ErrorCodeGroup.ClientHello | 0x01,
 
 	/// <summary>
 	/// The ClientHello.cipher_suites.length field value is invalid.
 	/// </summary>
-	ClientHelloField_CipherSuitesLength_ValueIsInvalid = 0x0321,
+	ClientHello_CipherSuitesLength_ValueIsInvalid = ErrorCodeGroup.ClientHello | 0x02,
 
 	/// <summary>
 	/// The ClientHello.legacy_compression_methods.length field value is invalid.
 	/// </summary>
-	ClientHelloField_LegacyCompressionMethodsLength_ValueIsInvalid = 0x0331,
+	ClientHello_LegacyCompressionMethodsLength_ValueIsInvalid = ErrorCodeGroup.ClientHello | 0x03,
 
 	/// <summary>
 	/// The ClientHello.extensions.length field value is invalid.
 	/// </summary>
-	ClientHelloField_ExtensionsLength_ValueIsInvalid = 0x0341,
+	ClientHello_ExtensionsLength_ValueIsInvalid = ErrorCodeGroup.ClientHello | 0x04,
 
 	/// <summary>
 	/// The Extension.extension_data.length field value is invalid.
 	/// </summary>
-	ExtensionField_ExtensionDataLength_ValueIsInvalid = 0x0411,
+	Extension_ExtensionDataLength_ValueIsInvalid = ErrorCodeGroup.Extension | 0x01,
 
 	/// <summary>
 	/// The supported_signature_algorithms.length field value is invalid.
 	/// </summary>
-	Extension_SignatureAlgorithmField_SupportedSignatureAlgorithmsLength_ValueIsInvalid = 0x0421
+	SignatureAlgorithm_SupportedSignatureAlgorithmsLength_ValueIsInvalid = ErrorCodeGroup.SignatureAlgorithm | 0x01
+}
+
+file static class ErrorCodeGroup
+{
+	public const Int32 Data               = 0x0100;
+	public const Int32 Record             = 0x0200;
+	public const Int32 Handshake          = 0x0300;
+	public const Int32 ClientHello        = 0x0400;
+	public const Int32 Extension          = 0x0500;
+	public const Int32 SignatureAlgorithm = 0x0600;
 }
