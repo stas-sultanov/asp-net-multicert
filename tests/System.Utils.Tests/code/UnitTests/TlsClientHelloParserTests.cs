@@ -12,7 +12,7 @@ using System.Net.Security;
 [TestClass]
 public sealed class TlsClientHelloParserTests
 {
-	#region Test Methods: Data Layer
+	#region Test Methods: Fail on Data
 
 	[TestMethod]
 	public void TryParse_Fail_If_Data_IsEmpty()
@@ -34,38 +34,38 @@ public sealed class TlsClientHelloParserTests
 
 	#endregion
 
-	#region Test Methods: Record Layer
+	#region Test Methods: Fail on TLSPlaintext
 
 	[TestMethod]
-	public void TryParse_Fail_If_RecordField_Type_ValueIsNotHandshake()
+	public void TryParse_Fail_If_TLSPlaintextField_Type_ValueIsNotHandshake()
 	{
 		// Content type must be 0x16 (handshake), so use 0 to trigger validation failure.
-		var record = TlsHelper.BuildTLSPlaintext(0, 0x0303, 0, []);
+		var record = TlsHelper.BuildTLSPlaintext(0, 0, []);
 
-		TestTryParseRecord(record, TlsClientHelloParseErrorCode.Record_Type_ValueIsNotHandshake);
+		TestTryParseRecord(record, TlsClientHelloParseErrorCode.TLSPlaintextField_Type_ValueIsNotHandshake);
 	}
 
 	[TestMethod]
-	public void TryParse_Fail_If_RecordField_Length_ValueIsLess()
+	public void TryParse_Fail_If_TLSPlaintextField_Length_ValueIsLess()
 	{
 		// Minimum valid handshake length is 4 bytes for the handshake header, so declare less than that.
-		var record = TlsHelper.BuildTLSPlaintext(0x16, 0x0303, 3, []);
+		var record = TlsHelper.BuildTLSPlaintext(0x16, 3, []);
 
-		TestTryParseRecord(record, TlsClientHelloParseErrorCode.Record_Length_ValueIsInvalid);
+		TestTryParseRecord(record, TlsClientHelloParseErrorCode.TLSPlaintextField_Length_ValueIsInvalid);
 	}
 
 	[TestMethod]
-	public void TryParse_Fail_If_RecordField_Length_ValueIsGreater()
+	public void TryParse_Fail_If_TLSPlaintextField_Length_ValueIsGreater()
 	{
 		// Handshake header is 4 bytes, so declare length greater than actual payload to trigger length validation failure.
-		var record = TlsHelper.BuildTLSPlaintext(0x16, 0x0303, 5, new Byte[4]);
+		var record = TlsHelper.BuildTLSPlaintext(0x16, 5, new Byte[4]);
 
-		TestTryParseRecord(record, TlsClientHelloParseErrorCode.Record_Length_ValueIsInvalid);
+		TestTryParseRecord(record, TlsClientHelloParseErrorCode.TLSPlaintextField_Length_ValueIsInvalid);
 	}
 
 	#endregion
 
-	#region Test Methods: Handshake Layer
+	#region Test Methods: Fail on Handshake
 
 	[TestMethod]
 	public void TryParse_Fail_If_HandshakeField_MessageType_ValueIsNotClientHello()
@@ -96,7 +96,7 @@ public sealed class TlsClientHelloParserTests
 
 	#endregion
 
-	#region Test Methods: ClientHello Layer
+	#region Test Methods: Fail on ClientHello
 
 	[TestMethod]
 	public void TryParse_Fail_If_ClientHelloField_LegacySessionIdLength_ValueIsGreaterThan32()
@@ -172,19 +172,69 @@ public sealed class TlsClientHelloParserTests
 		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.Extension_ExtensionDataLength_ValueIsInvalid);
 	}
 
+	#endregion
+
+	#region Test Methods: Fail on Signature Algorithms Extension
+
 	[TestMethod]
-	public void TryParse_Fail_If_ClientHelloExtensionSignatureAlgorithms_ExtensionsLength_ValueIsInvalid()
+	public void TryParse_Fail_If_SignatureAlgorithms_SupportedSignatureAlgorithmsLength_ValueIsZero()
 	{
-		var signatureAlgorithms = TlsHelper.BuildExtensionSignatureAlgorithms([0x0401]);
+		var signatureScheme = TlsHelper.BuildSignatureSchemeList(0, []);
 
-		// Declare extensions length of 9 bytes with only 8 bytes payload to trigger validation failure.
-		var clientHello = TlsHelper.BuildClientHelloTls13(0x0303, 0, [], 2, [0, 0], 0, [], (UInt16) signatureAlgorithms.Length, signatureAlgorithms);
+		var extension0 = TlsHelper.BuildExtension(0x000d, (UInt16) signatureScheme.Length, signatureScheme);
 
-		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.Extension_ExtensionDataLength_ValueIsInvalid);
+		var extension1 = TlsHelper.BuildExtension(1, 4, [0, 1, 2, 3]);
+
+		// Include 2nd extension to overcome < 8 bytes length check
+		var clientHello = TlsHelper.BuildClientHelloTls13([..extension0, ..extension1]);
+
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.SignatureAlgorithm_SupportedSignatureAlgorithmsLength_ValueIsInvalid);
 	}
 
 	[TestMethod]
-	public void TryParse_Succeed_If_ClientHello_IsValidWithoutAlgorithm()
+	public void TryParse_Fail_If_SignatureAlgorithms_SupportedSignatureAlgorithmsLength_ValueIsOdd()
+	{
+		var signatureScheme = TlsHelper.BuildSignatureSchemeList(3, [0x0401, 0x0501]);
+
+		var extension = TlsHelper.BuildExtension(0x000d, (UInt16) signatureScheme.Length, signatureScheme);
+
+		var clientHello = TlsHelper.BuildClientHelloTls13(extension);
+
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.SignatureAlgorithm_SupportedSignatureAlgorithmsLength_ValueIsInvalid);
+	}
+
+	[TestMethod]
+	public void TryParse_Fail_If_SignatureAlgorithms_SupportedSignatureAlgorithmsLength_ValueIsGreaterThanData()
+	{
+		var signatureScheme = TlsHelper.BuildSignatureSchemeList(4, [0x0401]);
+
+		var extension = TlsHelper.BuildExtension(0x000d, (UInt16) signatureScheme.Length, signatureScheme);
+
+		var clientHello = TlsHelper.BuildClientHelloTls13(extension);
+
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.SignatureAlgorithm_SupportedSignatureAlgorithmsLength_ValueIsInvalid);
+	}
+
+	[TestMethod]
+	public void TryParse_Fail_If_SignatureAlgorithms_SupportedSignatureAlgorithmsLength_ValueIsGreaterThanExtensionData_WhenFollowedByAnotherExtension()
+	{
+		var signatureScheme = TlsHelper.BuildSignatureSchemeList(6, [0x0401]); // declares 6 bytes, only 2 bytes of scheme data follow
+
+		var extension0 = TlsHelper.BuildExtension(0x000d, (UInt16) signatureScheme.Length, signatureScheme);
+
+		var extension1 = TlsHelper.BuildExtension(0x0002, 4, [0x00, 0x00, 0x00, 0x00]);
+
+		var clientHello = TlsHelper.BuildClientHelloTls13([..extension0, ..extension1]);
+
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.SignatureAlgorithm_SupportedSignatureAlgorithmsLength_ValueIsInvalid);
+	}
+
+	#endregion
+
+	#region Test Methods: Succeed
+
+	[TestMethod]
+	public void TryParse_Succeed_If_ClientHelloTls12_IsValidWithoutAlgorithm()
 	{
 		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.None;
 
@@ -199,7 +249,7 @@ public sealed class TlsClientHelloParserTests
 	}
 
 	[TestMethod]
-	public void TryParse_Succeed_If_ClientHello_IsValidWithAlgorithm()
+	public void TryParse_Succeed_If_ClientHelloTls12_IsValidWithAlgorithm()
 	{
 		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.RSA | TlsSignatureAlgorithms.ECDSA;
 
@@ -210,6 +260,39 @@ public sealed class TlsClientHelloParserTests
 		};
 
 		var clientHello = TlsHelper.BuildClientHelloTls12(expectedCipherSuites);
+
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
+	}
+
+	[TestMethod]
+	public void TryParse_Succeed_If_ClientHelloTls13_IsValidWithAlgorithmRsaAndEcdsa()
+	{
+		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.RSA | TlsSignatureAlgorithms.ECDSA;
+
+		// rsa_pkcs1_sha256 + ecdsa_secp521r1_sha512
+		var signatureScheme = TlsHelper.BuildSignatureSchemeList(4, [0x0401, 0x0603]);
+
+		var extension = TlsHelper.BuildExtension(0x000d, (UInt16) signatureScheme.Length, signatureScheme);
+
+		var clientHello = TlsHelper.BuildClientHelloTls13(extension);
+
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
+	}
+
+	[TestMethod]
+	public void TryParse_Succeed_If_ClientHelloTls13_IsValidWithAlgorithmEcdsa()
+	{
+		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.ECDSA;
+
+		// ecdsa_secp521r1_sha512
+		var signatureScheme = TlsHelper.BuildSignatureSchemeList(2, [0x0603]);
+
+		var extension0 = TlsHelper.BuildExtension(1, 4, [0, 1, 2, 3]);
+
+		var extension1 = TlsHelper.BuildExtension(0x000d, (UInt16) signatureScheme.Length, signatureScheme);
+
+		// Add another extension to cover the case where signature_algorithms extension is not the first extension.
+		var clientHello = TlsHelper.BuildClientHelloTls13([..extension0, ..extension1]);
 
 		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
 	}
@@ -231,7 +314,8 @@ public sealed class TlsClientHelloParserTests
 		TlsSignatureAlgorithms expectedSignatureAlgorithms = TlsSignatureAlgorithms.None
 	)
 	{
-		var handshake = TlsHelper.BuildHandshakeWithClientHello(clientHello);
+		// 0x01 is HandshakeType.client_hello.
+		var handshake = TlsHelper.BuildHandshake(0x01, (UInt32) clientHello.Length, clientHello);
 
 		TestTryParseHandshake(handshake, expectedErrorCode, expectedSignatureAlgorithms);
 	}
@@ -249,7 +333,8 @@ public sealed class TlsClientHelloParserTests
 		TlsSignatureAlgorithms expectedSignatureAlgorithms = TlsSignatureAlgorithms.None
 	)
 	{
-		var record = TlsHelper.BuildTlsPlaintextWithHandshake(handshake);
+		// 0x16 is ContentType.handshake, 0x0303 is legacy_record_version for TLS 1.2 and TLS 1.3.
+		var record = TlsHelper.BuildTLSPlaintext(0x16, (UInt16) handshake.Length, handshake);
 
 		TestTryParseRecord(record, expectedErrorCode, expectedSignatureAlgorithms);
 	}

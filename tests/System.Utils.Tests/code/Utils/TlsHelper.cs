@@ -8,6 +8,8 @@ using System.Security.Cryptography;
 
 internal static class TlsHelper
 {
+	#region Methods: Public
+
 	/// <summary>
 	/// Builds TLS 1.2 ClientHello structure as bytes.
 	/// </summary>
@@ -96,21 +98,21 @@ internal static class TlsHelper
 	}
 
 	/// <summary>
-	/// Builds extension.
+	/// Builds instance of generic Extension.
 	/// </summary>
-	/// <param name="extensionType">Extension.extension_type field value.</param>
-	/// <param name="extensionDataLength">Extension.extension_data.length field value.</param>
-	/// <param name="extensionData">Bytes to place in the Extension.extension_data.</param>
-	/// <returns>Complete extension bytes ready for inclusion in ClientHello.Extensions.</returns>
+	/// <param name="extension_type">Extension.extension_type field value.</param>
+	/// <param name="extension_data_length">Extension.extension_data.length field value.</param>
+	/// <param name="extension_data">Extension.extension_data field value.</param>
+	/// <returns>Generic Extension.</returns>
 	public static Byte[] BuildExtension
 	(
-		UInt16 extensionType,
-		UInt16 extensionDataLength,
-		Byte[] extensionData
+		UInt16 extension_type,
+		UInt16 extension_data_length,
+		Byte[] extension_data
 	)
 	{
 		// extension_type(2) + extension_data_length(2) + extension_data.data
-		var resultLength = 4 + extensionData.Length;
+		var resultLength = 4 + extension_data.Length;
 
 		// Allocate exact extension byte array
 		var result = new Byte[resultLength];
@@ -118,74 +120,27 @@ internal static class TlsHelper
 		var position = 0;
 
 		// Extension.extension_type
-		result[position++] = (Byte) (extensionType >> 8);
-		result[position++] = (Byte) extensionType;
+		result[position++] = (Byte) (extension_type >> 8);
+		result[position++] = (Byte) extension_type;
 
 		// Extension.extension_data.length
-		result[position++] = (Byte) (extensionDataLength >> 8);
-		result[position++] = (Byte) extensionDataLength;
+		result[position++] = (Byte) (extension_data_length >> 8);
+		result[position++] = (Byte) extension_data_length;
 
 		// Extension.extension_data.data
-		Buffer.BlockCopy(extensionData, 0, result, position, extensionData.Length);
+		Buffer.BlockCopy(extension_data, 0, result, position, extension_data.Length);
 
 		return result;
 	}
 
 	/// <summary>
-	/// Builds signature_algorithms extension as bytes.
-	/// </summary>
-	/// <remarks>Signature Algorithms defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.</remarks>
-	/// <param name="signatureSchemes">Array of SignatureScheme values to include in the extension.</param>
-	/// <returns>Complete signature_algorithms extension bytes ready for inclusion in ClientHello extensions.</returns>
-	public static Byte[] BuildExtensionSignatureAlgorithms
-	(
-		UInt16[] signatureSchemes
-	)
-	{
-		// supported_signature_algorithms.length
-		var supportedSignatureAlgorithmsLength = (UInt16) (signatureSchemes.Length * 2);
-
-		// Extension.extension_data.length
-		var extensionDataLength = 2 + supportedSignatureAlgorithmsLength;
-
-		// extension_type(2) + extension_data_length(2) + supported_signature_algorithms_length(2) + schemes
-		var resultLength = 4 + extensionDataLength;
-
-		// Allocate exact extension byte array
-		var result = new Byte[resultLength];
-
-		var position = 0;
-
-		// Extension.extension_type (signature_algorithms = 13)
-		result[position++] = 0x00;
-		result[position++] = 0x0D;
-
-		// Extension.extension_data.length
-		result[position++] = (Byte) (extensionDataLength >> 8);
-		result[position++] = (Byte) extensionDataLength;
-
-		// SignatureSchemeList.supported_signature_algorithms.length
-		result[position++] = (Byte) (supportedSignatureAlgorithmsLength >> 8);
-		result[position++] = (Byte) supportedSignatureAlgorithmsLength;
-
-		// SignatureSchemeList.supported_signature_algorithms.data
-		foreach (var scheme in signatureSchemes)
-		{
-			result[position++] = (Byte) (scheme >> 8);
-			result[position++] = (Byte) scheme;
-		}
-
-		return result;
-	}
-
-	/// <summary>
-	/// Builds Handshake structure as bytes.
+	/// Builds instance of Handshake struct as bytes.
 	/// </summary>
 	/// <remarks>Handshake struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4">RFC 8446 Section 4</see>.</remarks>
 	/// <param name="msg_type">Handshake.msg_type field value.</param>
 	/// <param name="length">Handshake.length field value.</param>
 	/// <param name="message">Bytes to place in the Handshake message body.</param>
-	/// <returns>Complete Handshake bytes ready for wrapping into a TLS record.</returns>
+	/// <returns>Handshake struct.</returns>
 	public static Byte[] BuildHandshake
 	(
 		Byte msg_type,
@@ -215,39 +170,58 @@ internal static class TlsHelper
 	}
 
 	/// <summary>
-	/// Builds Handshake structure bytes with controllable ClientHello body length.
+	/// Builds instance of SignatureSchemeList struct as bytes.
 	/// </summary>
-	/// <remarks>Handshake struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.1">RFC 8446 Section 4.1</see>.</remarks>
-	/// <param name="clientHello">The ClientHello body bytes to place in the Handshake message body.</param>
-	/// <returns>Complete Handshake bytes with ClientHello as the message body.</returns>
-	public static Byte[] BuildHandshakeWithClientHello
+	/// <remarks>SignatureSchemeList struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.</remarks>
+	/// <param name="supported_signature_algorithms_length">supported_signature_algorithms.length field value.</param>
+	/// <param name="supported_signature_algorithms">supported_signature_algorithms.data field value.</param>
+	/// <returns>SignatureSchemeList struct.</returns>
+	public static Byte[] BuildSignatureSchemeList
 	(
-		Byte[] clientHello
+		UInt16 supported_signature_algorithms_length,
+		UInt16[] supported_signature_algorithms
 	)
 	{
-		// Return complete handshake bytes.
-		return BuildHandshake(0x01, (UInt32) clientHello.Length, clientHello);
+		// Actual byte size of the scheme data.
+		var length = (UInt16) (supported_signature_algorithms.Length * 2);
+
+		// Total result size: 2-byte length field + scheme data.
+		var extensionDataLength = (UInt16) (2 + length);
+		var result = new Byte[extensionDataLength];
+
+		var position = 0;
+
+		// SignatureSchemeList.supported_signature_algorithms.length
+		result[position++] = (Byte) (supported_signature_algorithms_length >> 8);
+		result[position++] = (Byte) supported_signature_algorithms_length;
+
+		// SignatureSchemeList.supported_signature_algorithms.data
+		foreach (var scheme in supported_signature_algorithms)
+		{
+			result[position++] = (Byte) (scheme >> 8);
+			result[position++] = (Byte) scheme;
+		}
+
+		return result;
 	}
 
 	/// <summary>
-	/// Builds TLSPlaintext record as bytes.
+	/// Builds instance of TLSPlaintext struct as bytes.
 	/// </summary>
 	/// <remarks>TLSPlaintext struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-5.1">RFC 8446 Section 5.1</see>.</remarks>
 	/// <param name="type">TLSPlaintext.type field value.</param>
-	/// <param name="legacy_record_version">TLSPlaintext.legacy_record_version field value.</param>
 	/// <param name="length">TLSPlaintext.length field value.</param>
-	/// <param name="payload">Bytes to place in the TLSPlaintext fragment/payload.</param>
-	/// <returns>Complete TLSPlaintext record bytes ready for parsing.</returns>
+	/// <param name="fragment">TLSPlaintext.fragment field value.</param>
+	/// <returns>TLSPlaintext struct.</returns>
 	public static Byte[] BuildTLSPlaintext
 	(
 		Byte type,
-		UInt16 legacy_record_version,
 		UInt16 length,
-		Byte[] payload
+		Byte[] fragment
 	)
 	{
 		// 1 byte for type + 2 bytes for legacy_record_version + 2 bytes for length + payload
-		var resultLength = 5 + payload.Length;
+		var resultLength = 5 + fragment.Length;
 
 		// Allocate exact TLS record byte array
 		var result = new Byte[resultLength];
@@ -256,43 +230,25 @@ internal static class TlsHelper
 		result[0] = type;
 
 		// TLSPlaintext.legacy_record_version
-		result[1] = (Byte) (legacy_record_version >> 8);
-		result[2] = (Byte) legacy_record_version;
+		result[1] = 0x03;
+		result[2] = 0x03;
 
 		// TLSPlaintext.length as big-endian UInt16
 		result[3] = (Byte) (length >> 8);
 		result[4] = (Byte) length;
 
-		// Copy handshake payload after 5-byte record header
-		Buffer.BlockCopy(payload, 0, result, 5, payload.Length);
+		// Copy fragment after 5-byte record header
+		Buffer.BlockCopy(fragment, 0, result, 5, fragment.Length);
 
 		// Return complete TLSPlaintext record
 		return result;
 	}
 
-	/// <summary>
-	/// Builds TLSPlaintext record with Handshake payload record.
-	/// </summary>
-	/// <remarks>TLSPlaintext struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-5.1">RFC 8446 Section 5.1</see>.</remarks>
-	/// <param name="handshake">Handshake bytes to place in the record payload.</param>
-	/// <param name="overrideLength">If specified, overrides the TLSPlaintext.length field with this value instead of the actual handshake length.</param>
-	/// <param name="overrideType">If specified, overrides the TLSPlaintext.type field with this value instead of the default handshake type (0x16).</param>
-	/// <returns>Complete TLSPlaintext record bytes ready for parsing.</returns>
-	public static Byte[] BuildTlsPlaintextWithHandshake
-	(
-		Byte[] handshake,
-		UInt16? overrideLength = null,
-		Byte? overrideType = null
-	)
-	{
-		var type = overrideType ?? 0x16; // Default to handshake content type
-		var length = overrideLength ?? (UInt16) handshake.Length;
+	#endregion
 
-		// Return complete TLSPlaintext record
-		return BuildTLSPlaintext(type, 0x0303, length, handshake);
-	}
+	#region Methods: Private
 
-	public static Int32 FillClientHello
+	private static Int32 FillClientHello
 	(
 		ref Byte[] buffer,
 		UInt16 legacy_version,
@@ -339,4 +295,6 @@ internal static class TlsHelper
 
 		return position;
 	}
+
+	#endregion
 }

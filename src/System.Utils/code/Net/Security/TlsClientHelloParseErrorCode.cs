@@ -31,12 +31,12 @@ public enum TlsClientHelloParseErrorCode
 	/// <summary>
 	/// The TLSPlaintext.length field value is invalid.
 	/// </summary>
-	Record_Length_ValueIsInvalid = ErrorCodeGroup.Record | 0x01,
+	TLSPlaintextField_Length_ValueIsInvalid = ErrorCodeGroup.Record | 0x01,
 
 	/// <summary>
 	/// The TLSPlaintext.type field value is not ContentType.handshake.
 	/// </summary>
-	Record_Type_ValueIsNotHandshake = ErrorCodeGroup.Record | 0x02,
+	TLSPlaintextField_Type_ValueIsNotHandshake = ErrorCodeGroup.Record | 0x02,
 
 	/// <summary>
 	/// The Handshake.msg_type field value is not HandshakeType.client_hello.
