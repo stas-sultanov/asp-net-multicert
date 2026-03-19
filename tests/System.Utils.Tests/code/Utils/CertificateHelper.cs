@@ -21,7 +21,7 @@ internal sealed class CertificateHelper
 	/// </summary>
 	public X509EnhancedKeyUsageExtension ExtensionEnhancedKeyUsage { get; init; } = new X509EnhancedKeyUsageExtension(
 		[
-			// TLS Web Server Authentication (1.3.6.1.5.5.7.3.1)
+			// TLS Web Server Authentication
 			new("1.3.6.1.5.5.7.3.1")
 		], false);
 

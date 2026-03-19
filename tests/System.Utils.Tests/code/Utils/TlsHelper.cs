@@ -1,8 +1,6 @@
 // Authored by Stas Sultanov
 // Copyright © Stas Sultanov
 
-namespace System.Utils.UnitTests;
-
 using System.Net.Security;
 using System.Security.Cryptography;
 

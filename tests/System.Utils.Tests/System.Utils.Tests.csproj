@@ -2,7 +2,7 @@
 
 	<PropertyGroup>
 		<AnalysisLevel>latest-recommended</AnalysisLevel>
-		<AssemblyName>System.UtilsTests</AssemblyName>
+		<AssemblyName>System.Utils.Tests</AssemblyName>
 		<EnableNETAnalyzers>true</EnableNETAnalyzers>
 		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
