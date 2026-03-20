@@ -11,6 +11,8 @@ using System.Buffers;
 [TestClass]
 public sealed class SequenceReaderAdvanceExtensionsTests
 {
+	#region Test Methods: TryReadBigEndian
+
 	[TestMethod]
 	public void TryReadBigEndian_ShouldNotLoseData_WhenSignedValueIsConvertedToUInt16()
 	{
@@ -24,6 +26,10 @@ public sealed class SequenceReaderAdvanceExtensionsTests
 		Assert.AreEqual((UInt16) 0x8001, value);
 		Assert.AreEqual(0, reader.Remaining);
 	}
+
+	#endregion
+
+	#region Test Methods: TryReadBigEndian24
 
 	[TestMethod]
 	public void TryReadBigEndian24_Fail_IfDataLengthIs0()
@@ -83,4 +89,6 @@ public sealed class SequenceReaderAdvanceExtensionsTests
 		Assert.AreEqual(expectedValue, actualValue);
 		Assert.AreEqual(1, reader.Remaining);
 	}
+
+	#endregion
 }
