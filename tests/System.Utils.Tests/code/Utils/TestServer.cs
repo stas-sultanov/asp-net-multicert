@@ -17,7 +17,7 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 
 /// <summary>
 /// A self-contained HTTPS test server built on Kestrel that demonstrates certificate selection
-/// based on the signature algorithms advertised in the TLS ClientHello message.
+/// based on the certificate authentication algorithms advertised in the TLS ClientHello message.
 /// Supports both ECDsa and RSA certificates.
 /// </summary>
 [SupportedOSPlatform("linux")]
@@ -26,10 +26,10 @@ internal sealed class TestServer
 	#region Fields
 
 	/// <summary>
-	/// The key used to store the parsed <see cref="TlsSignatureAlgorithms"/> value
+	/// The key used to store the parsed <see cref="TlsCertificateAuthenticationAlgorithms"/> value
 	/// in <see cref="ConnectionContext"/> during the TLS handshake.
 	/// </summary>
-	private const String ConnectionContextItemsKeySignatureAlgorithmsName = "SignatureAlgorithms";
+	private const String ConnectionContextItemsKeyAuthenticationAlgorithmsName = "AuthenticationAlgorithms";
 
 	/// <summary>
 	/// The set of TLS cipher suites the server is restricted to.
@@ -47,10 +47,10 @@ internal sealed class TestServer
 		TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384
 	];
 
-	/// <summary>Self-signed ECDsa certificate used when the client supports ECDSA signature algorithms.</summary>
+	/// <summary>Self-signed ECDsa certificate used when the client supports ECDSA certificate authentication.</summary>
 	private readonly X509Certificate2 certificateECDsa;
 
-	/// <summary>Self-signed RSA certificate used when the client supports RSA signature algorithms.</summary>
+	/// <summary>Self-signed RSA certificate used when the client supports RSA certificate authentication.</summary>
 	private readonly X509Certificate2 certificateRSA;
 
 	#endregion
@@ -141,17 +141,17 @@ internal sealed class TestServer
 	}
 
 	/// <summary>
-	/// Parses the raw TLS ClientHello bytes to extract the client's supported signature algorithms
+	/// Parses the raw TLS ClientHello bytes to extract the client's supported certificate authentication algorithms
 	/// and stores them in <see cref="ConnectionContext"/> for later use by <see cref="SelectCertifiacte"/>.
 	/// If parsing fails, the error code is stored instead.
 	/// </summary>
 	private static void OnTlsClientHelloBytes(ConnectionContext connectionContext, ReadOnlySequence<Byte> data)
 	{
-		var cipherSuitParseResult = TlsClientHelloParser.TryParse(data, out var signatureAlgorithms);
+		var cipherSuitParseResult = TlsClientHelloParser.TryParse(data, out var authenticationAlgorithms);
 
 		if (cipherSuitParseResult == TlsClientHelloParseErrorCode.None)
 		{
-			connectionContext.Items[ConnectionContextItemsKeySignatureAlgorithmsName] = signatureAlgorithms;
+			connectionContext.Items[ConnectionContextItemsKeyAuthenticationAlgorithmsName] = authenticationAlgorithms;
 		}
 		else
 		{
@@ -166,11 +166,11 @@ internal sealed class TestServer
 	}
 
 	/// <summary>
-	/// Selects the appropriate server certificate based on the signature algorithms
+	/// Selects the appropriate server certificate based on the certificate authentication algorithms
 	/// advertised by the client in its TLS ClientHello message.
 	/// Prefers ECDsa over RSA when both are supported by the client.
 	/// </summary>
-	/// <param name="context">The connection context carrying the parsed signature algorithms.</param>
+	/// <param name="context">The connection context carrying the parsed certificate authentication algorithms.</param>
 	/// <param name="_">The server name indication value (unused).</param>
 	/// <returns>
 	/// The <see cref="certificateECDsa"/> if the client supports ECDSA,
@@ -184,22 +184,22 @@ internal sealed class TestServer
 			return null;
 		}
 
-		if (!context.Items.TryGetValue(ConnectionContextItemsKeySignatureAlgorithmsName, out var signatureAlgorithmsObj))
+		if (!context.Items.TryGetValue(ConnectionContextItemsKeyAuthenticationAlgorithmsName, out var authenticationAlgorithmsObj))
 		{
 			return null;
 		}
 
-		if (signatureAlgorithmsObj is not TlsSignatureAlgorithms signatureAlgorithms)
+		if (authenticationAlgorithmsObj is not TlsCertificateAuthenticationAlgorithms authenticationAlgorithms)
 		{
 			return null;
 		}
 
-		if (signatureAlgorithms.HasFlag(TlsSignatureAlgorithms.ECDSA))
+		if (authenticationAlgorithms.HasFlag(TlsCertificateAuthenticationAlgorithms.ECDSA))
 		{
 			return certificateECDsa;
 		}
 
-		if (signatureAlgorithms.HasFlag(TlsSignatureAlgorithms.RSA))
+		if (authenticationAlgorithms.HasFlag(TlsCertificateAuthenticationAlgorithms.RSA))
 		{
 			return certificateRSA;
 		}

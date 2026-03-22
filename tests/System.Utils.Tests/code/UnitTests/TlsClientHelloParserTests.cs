@@ -236,7 +236,7 @@ public sealed class TlsClientHelloParserTests
 	[TestMethod]
 	public void TryParse_Succeed_If_ClientHelloTls12_IsValidWithoutAlgorithm()
 	{
-		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.None;
+		var expectedAuthenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None;
 
 		var expectedCipherSuites = new TlsCipherSuite []
 		{
@@ -245,13 +245,13 @@ public sealed class TlsClientHelloParserTests
 
 		var clientHello = TlsHelper.BuildClientHelloTls12(expectedCipherSuites);
 
-		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedAuthenticationAlgorithms);
 	}
 
 	[TestMethod]
 	public void TryParse_Succeed_If_ClientHelloTls12_IsValidWithAlgorithm()
 	{
-		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.RSA | TlsSignatureAlgorithms.ECDSA;
+		var expectedAuthenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.RSA | TlsCertificateAuthenticationAlgorithms.ECDSA;
 
 		var expectedCipherSuites = new TlsCipherSuite []
 		{
@@ -261,13 +261,13 @@ public sealed class TlsClientHelloParserTests
 
 		var clientHello = TlsHelper.BuildClientHelloTls12(expectedCipherSuites);
 
-		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedAuthenticationAlgorithms);
 	}
 
 	[TestMethod]
 	public void TryParse_Succeed_If_ClientHelloTls13_IsValidWithAlgorithmRsaAndEcdsa()
 	{
-		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.RSA | TlsSignatureAlgorithms.ECDSA;
+		var expectedAuthenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.RSA | TlsCertificateAuthenticationAlgorithms.ECDSA;
 
 		// rsa_pkcs1_sha256 + ecdsa_secp521r1_sha512
 		var signatureScheme = TlsHelper.BuildSignatureSchemeList(4, [0x0401, 0x0603]);
@@ -276,13 +276,13 @@ public sealed class TlsClientHelloParserTests
 
 		var clientHello = TlsHelper.BuildClientHelloTls13(extension);
 
-		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedAuthenticationAlgorithms);
 	}
 
 	[TestMethod]
 	public void TryParse_Succeed_If_ClientHelloTls13_IsValidWithAlgorithmEcdsa()
 	{
-		var expectedSignatureAlgorithms = TlsSignatureAlgorithms.ECDSA;
+		var expectedAuthenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.ECDSA;
 
 		// ecdsa_secp521r1_sha512
 		var signatureScheme = TlsHelper.BuildSignatureSchemeList(2, [0x0603]);
@@ -294,7 +294,22 @@ public sealed class TlsClientHelloParserTests
 		// Add another extension to cover the case where signature_algorithms extension is not the first extension.
 		var clientHello = TlsHelper.BuildClientHelloTls13([..extension0, ..extension1]);
 
-		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedSignatureAlgorithms);
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedAuthenticationAlgorithms);
+	}
+
+	[TestMethod]
+	public void TryParse_Succeed_If_ClientHelloTls13_IsValidWithAlgorithmEdDsa()
+	{
+		var expectedAuthenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.EdDSA;
+
+		// ed25519
+		var signatureScheme = TlsHelper.BuildSignatureSchemeList(2, [0x0807]);
+
+		var extension = TlsHelper.BuildExtension(0x000d, (UInt16) signatureScheme.Length, signatureScheme);
+
+		var clientHello = TlsHelper.BuildClientHelloTls13(extension);
+
+		TestTryParseClientHello(clientHello, TlsClientHelloParseErrorCode.None, expectedAuthenticationAlgorithms);
 	}
 
 	#endregion
@@ -306,18 +321,18 @@ public sealed class TlsClientHelloParserTests
 	/// </summary>
 	/// <param name="clientHello">The ClientHello bytes to parse.</param>
 	/// <param name="expectedErrorCode">The expected error code from the parser.</param>
-	/// <param name="expectedSignatureAlgorithms">The expected signature algorithms from the parser.</param>
+	/// <param name="expectedAuthenticationAlgorithms">The expected certificate authentication algorithms from the parser.</param>
 	private static void TestTryParseClientHello
 	(
 		Byte[] clientHello,
 		TlsClientHelloParseErrorCode expectedErrorCode = TlsClientHelloParseErrorCode.None,
-		TlsSignatureAlgorithms expectedSignatureAlgorithms = TlsSignatureAlgorithms.None
+		TlsCertificateAuthenticationAlgorithms expectedAuthenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None
 	)
 	{
 		// 0x01 is HandshakeType.client_hello.
 		var handshake = TlsHelper.BuildHandshake(0x01, (UInt32) clientHello.Length, clientHello);
 
-		TestTryParseHandshake(handshake, expectedErrorCode, expectedSignatureAlgorithms);
+		TestTryParseHandshake(handshake, expectedErrorCode, expectedAuthenticationAlgorithms);
 	}
 
 	/// <summary>
@@ -325,18 +340,18 @@ public sealed class TlsClientHelloParserTests
 	/// </summary>
 	/// <param name="handshake">The TLS handshake bytes to parse.</param>
 	/// <param name="expectedErrorCode">The expected error code from the parser.</param>
-	/// <param name="expectedSignatureAlgorithms">The expected signature algorithms from the parser.</param>
+	/// <param name="expectedAuthenticationAlgorithms">The expected certificate authentication algorithms from the parser.</param>
 	private static void TestTryParseHandshake
 	(
 		Byte[] handshake,
 		TlsClientHelloParseErrorCode expectedErrorCode = TlsClientHelloParseErrorCode.None,
-		TlsSignatureAlgorithms expectedSignatureAlgorithms = TlsSignatureAlgorithms.None
+		TlsCertificateAuthenticationAlgorithms expectedAuthenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None
 	)
 	{
 		// 0x16 is ContentType.handshake, 0x0303 is legacy_record_version for TLS 1.2 and TLS 1.3.
 		var record = TlsHelper.BuildTLSPlaintext(0x16, (UInt16) handshake.Length, handshake);
 
-		TestTryParseRecord(record, expectedErrorCode, expectedSignatureAlgorithms);
+		TestTryParseRecord(record, expectedErrorCode, expectedAuthenticationAlgorithms);
 	}
 
 	/// <summary>
@@ -344,17 +359,17 @@ public sealed class TlsClientHelloParserTests
 	/// </summary>
 	/// <param name="record">The TLS record bytes to parse.</param>
 	/// <param name="expectedErrorCode">The expected error code from the parser.</param>
-	/// <param name="expectedSignatureAlgorithms">The expected signature algorithms from the parser.</param>
+	/// <param name="expectedAuthenticationAlgorithms">The expected certificate authentication algorithms from the parser.</param>
 	private static void TestTryParseRecord
 	(
 		Byte[] record,
 		TlsClientHelloParseErrorCode expectedErrorCode = TlsClientHelloParseErrorCode.None,
-		TlsSignatureAlgorithms expectedSignatureAlgorithms = TlsSignatureAlgorithms.None
+		TlsCertificateAuthenticationAlgorithms expectedAuthenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None
 	)
 	{
 		var data = new ReadOnlySequence<Byte>(record);
 
-		TestTryParseData(data, expectedErrorCode, expectedSignatureAlgorithms);
+		TestTryParseData(data, expectedErrorCode, expectedAuthenticationAlgorithms);
 	}
 
 	/// <summary>
@@ -362,18 +377,18 @@ public sealed class TlsClientHelloParserTests
 	/// </summary>
 	/// <param name="data">The TLS record bytes to parse.</param>
 	/// <param name="expectedErrorCode">The expected error code from the parser.</param>
-	/// <param name="expectedSignatureAlgorithms">The expected signature algorithms from the parser.</param>
+	/// <param name="expectedAuthenticationAlgorithms">The expected certificate authentication algorithms from the parser.</param>
 	private static void TestTryParseData
 	(
 		ReadOnlySequence<Byte> data,
 		TlsClientHelloParseErrorCode expectedErrorCode = TlsClientHelloParseErrorCode.None,
-		TlsSignatureAlgorithms expectedSignatureAlgorithms = TlsSignatureAlgorithms.None
+		TlsCertificateAuthenticationAlgorithms expectedAuthenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None
 	)
 	{
-		var result = TlsClientHelloParser.TryParse(data, out var signatureAlgorithms);
+		var result = TlsClientHelloParser.TryParse(data, out var authenticationAlgorithms);
 
 		Assert.AreEqual(expectedErrorCode, result);
-		Assert.AreEqual(expectedSignatureAlgorithms, signatureAlgorithms);
+		Assert.AreEqual(expectedAuthenticationAlgorithms, authenticationAlgorithms);
 	}
 
 	#endregion

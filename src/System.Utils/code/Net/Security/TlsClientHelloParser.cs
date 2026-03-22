@@ -25,182 +25,184 @@ public static class TlsClientHelloParser
 	private const UInt32 HandshakeHeaderSize = 4;
 
 	/// <summary>
-	/// TLS 1.2 lookup table to infer server authentication signature algorithms from the cipher suites advertised in ClientHello.
+	/// TLS 1.2 lookup table to infer certificate authentication algorithms from the cipher suites advertised in ClientHello.
 	/// </summary>
-	private static readonly FrozenDictionary<TlsCipherSuite, TlsSignatureAlgorithms> tls12AuthSALookup
-		= new Dictionary<TlsCipherSuite, TlsSignatureAlgorithms>
+	private static readonly FrozenDictionary<TlsCipherSuite, TlsCertificateAuthenticationAlgorithms> tls12AuthSALookup
+		= new Dictionary<TlsCipherSuite, TlsCertificateAuthenticationAlgorithms>
 	{
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_CCM, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_CCM_8, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_CCM, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_CCM_8, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_ARIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_ARIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_ARIA_256_CBC_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_ARIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_DES_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DHE_RSA_WITH_SEED_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_128_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_256_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_256_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_ARIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_ARIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_ARIA_256_CBC_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_ARIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_DES_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_DH_RSA_WITH_SEED_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CCM, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_ARIA_128_CBC_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_ARIA_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_ARIA_256_CBC_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_ARIA_256_GCM_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_GCM_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_NULL_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_ARIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_ARIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_ARIA_256_CBC_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_ARIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_NULL_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_RC4_128_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_ARIA_128_CBC_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_ARIA_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_ARIA_256_CBC_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_ARIA_256_GCM_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_NULL_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_RC4_128_SHA, TlsSignatureAlgorithms.ECDSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_128_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_256_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_ARIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_ARIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_ARIA_256_CBC_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_ARIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_CAMELLIA_256_CBC_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_NULL_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_RC4_128_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_3DES_EDE_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_CCM, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_CCM_8, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_CCM, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_CCM_8, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_ARIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_ARIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_ARIA_256_CBC_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_ARIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_128_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_256_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_DES_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_IDEA_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_NULL_MD5, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_NULL_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_NULL_SHA256, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_RC4_128_MD5, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_RC4_128_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_RSA_WITH_SEED_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA, TlsSignatureAlgorithms.RSA },
-		{ TlsCipherSuite.TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA, TlsSignatureAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_CCM, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_CCM_8, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_CCM, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_CCM_8, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_AES_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_ARIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_ARIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_ARIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_ARIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_DES_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DHE_RSA_WITH_SEED_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_256_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_AES_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_ARIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_ARIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_ARIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_ARIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_DES_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_DH_RSA_WITH_SEED_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CCM, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_CCM_8, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_ARIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_ARIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_ARIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_ARIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CAMELLIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CAMELLIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_NULL_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_RC4_128_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_ARIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_ARIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_ARIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_ARIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CAMELLIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_NULL_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDHE_RSA_WITH_RC4_128_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_ARIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_ARIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_ARIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_ARIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_CAMELLIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_CAMELLIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_CAMELLIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_CAMELLIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_NULL_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_ECDSA_WITH_RC4_128_SHA, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_ARIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_ARIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_ARIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_ARIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_CAMELLIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_NULL_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_ECDH_RSA_WITH_RC4_128_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_3DES_EDE_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_CCM, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_CCM_8, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_CCM, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_CCM_8, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_ARIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_ARIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_ARIA_256_CBC_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_ARIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_128_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_128_GCM_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_256_CBC_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_256_GCM_SHA384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_DES_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_IDEA_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_NULL_MD5, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_NULL_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_NULL_SHA256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_RC4_128_MD5, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_RC4_128_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_RSA_WITH_SEED_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_SRP_SHA_RSA_WITH_3DES_EDE_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_SRP_SHA_RSA_WITH_AES_128_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsCipherSuite.TLS_SRP_SHA_RSA_WITH_AES_256_CBC_SHA, TlsCertificateAuthenticationAlgorithms.RSA },
 	}.ToFrozenDictionary();
 
 	/// <summary>
-	/// TLS 1.3 lookup table to infer server authentication signature algorithms from the signature_algorithms extension advertised in ClientHello.
+	/// TLS 1.3 lookup table to infer certificate authentication algorithms from the signature_algorithms extension advertised in ClientHello.
 	/// </summary>
-	private static readonly FrozenDictionary<TlsSignatureScheme, TlsSignatureAlgorithms> tls13AuthSALookup
-		= new Dictionary<TlsSignatureScheme, TlsSignatureAlgorithms>
+	private static readonly FrozenDictionary<TlsSignatureScheme, TlsCertificateAuthenticationAlgorithms> tls13AuthSALookup
+		= new Dictionary<TlsSignatureScheme, TlsCertificateAuthenticationAlgorithms>
 	{
-		{ TlsSignatureScheme.ecdsa_secp256r1_sha256, TlsSignatureAlgorithms.ECDSA },
-		{ TlsSignatureScheme.ecdsa_secp384r1_sha384, TlsSignatureAlgorithms.ECDSA },
-		{ TlsSignatureScheme.ecdsa_secp521r1_sha512, TlsSignatureAlgorithms.ECDSA },
-		{ TlsSignatureScheme.ecdsa_sha1, TlsSignatureAlgorithms.ECDSA },
-		{ TlsSignatureScheme.rsa_pkcs1_sha1, TlsSignatureAlgorithms.RSA },
-		{ TlsSignatureScheme.rsa_pkcs1_sha256, TlsSignatureAlgorithms.RSA },
-		{ TlsSignatureScheme.rsa_pkcs1_sha384, TlsSignatureAlgorithms.RSA },
-		{ TlsSignatureScheme.rsa_pkcs1_sha512, TlsSignatureAlgorithms.RSA },
-		{ TlsSignatureScheme.rsa_pss_pss_sha256, TlsSignatureAlgorithms.RSA },
-		{ TlsSignatureScheme.rsa_pss_pss_sha384, TlsSignatureAlgorithms.RSA },
-		{ TlsSignatureScheme.rsa_pss_pss_sha512, TlsSignatureAlgorithms.RSA },
-		{ TlsSignatureScheme.rsa_pss_rsae_sha256, TlsSignatureAlgorithms.RSA },
-		{ TlsSignatureScheme.rsa_pss_rsae_sha384, TlsSignatureAlgorithms.RSA },
-		{ TlsSignatureScheme.rsa_pss_rsae_sha512, TlsSignatureAlgorithms.RSA },
+		{ TlsSignatureScheme.ecdsa_secp256r1_sha256, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsSignatureScheme.ecdsa_secp384r1_sha384, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsSignatureScheme.ecdsa_secp521r1_sha512, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsSignatureScheme.ecdsa_sha1, TlsCertificateAuthenticationAlgorithms.ECDSA },
+		{ TlsSignatureScheme.ed25519, TlsCertificateAuthenticationAlgorithms.EdDSA },
+		{ TlsSignatureScheme.ed448, TlsCertificateAuthenticationAlgorithms.EdDSA },
+		{ TlsSignatureScheme.rsa_pkcs1_sha1, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pkcs1_sha256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pkcs1_sha384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pkcs1_sha512, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_pss_sha256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_pss_sha384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_pss_sha512, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_rsae_sha256, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_rsae_sha384, TlsCertificateAuthenticationAlgorithms.RSA },
+		{ TlsSignatureScheme.rsa_pss_rsae_sha512, TlsCertificateAuthenticationAlgorithms.RSA },
 	}.ToFrozenDictionary();
 
 	#endregion
@@ -209,21 +211,22 @@ public static class TlsClientHelloParser
 
 	/// <summary>
 	/// Tries to parse the given bytes as a ClientHello message carried in TLS,
-	/// and extract the supported signature algorithms.
+	/// and extract the certificate authentication algorithms inferred from that ClientHello
+	/// for server certificate selection.
 	/// </summary>
 	/// <param name="data">The bytes that should represent the TLS ClientHello message, starting from the beginning of the TLS record.</param>
-	/// <param name="signatureAlgorithms">The output bitwise flags of signature algorithms extracted from the ClientHello message, if parsing is successful; otherwise, <see cref="TlsSignatureAlgorithms.None"/>.</param>
+	/// <param name="authenticationAlgorithms">The output bitwise flags of certificate authentication algorithms inferred from the ClientHello message, if parsing is successful; otherwise, <see cref="TlsCertificateAuthenticationAlgorithms.None"/>.</param>
 	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static TlsClientHelloParseErrorCode TryParse
 	(
 		ReadOnlySequence<Byte> data,
-		out TlsSignatureAlgorithms signatureAlgorithms
+		out TlsCertificateAuthenticationAlgorithms authenticationAlgorithms
 	)
 	{
 		if (data.IsEmpty)
 		{
-			signatureAlgorithms = TlsSignatureAlgorithms.None;
+			authenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None;
 			return TlsClientHelloParseErrorCode.Data_IsEmpty;
 		}
 
@@ -231,7 +234,7 @@ public static class TlsClientHelloParser
 		// must be at least the TLSPlaintext header size (5 bytes)
 		if (data.Length < 5)
 		{
-			signatureAlgorithms = TlsSignatureAlgorithms.None;
+			authenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None;
 			return TlsClientHelloParseErrorCode.Data_LengthIsInvalid;
 		}
 
@@ -243,7 +246,7 @@ public static class TlsClientHelloParser
 
 		if (result != TlsClientHelloParseErrorCode.None)
 		{
-			signatureAlgorithms = TlsSignatureAlgorithms.None;
+			authenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None;
 			return result;
 		}
 
@@ -252,12 +255,12 @@ public static class TlsClientHelloParser
 
 		if (result != TlsClientHelloParseErrorCode.None)
 		{
-			signatureAlgorithms = TlsSignatureAlgorithms.None;
+			authenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None;
 			return result;
 		}
 
-		// ClientHello message containing signature algorithms
-		result = TryProcessClientHello(ref reader, clientHelloLength, out signatureAlgorithms);
+		// ClientHello message containing certificate authentication algorithms
+		result = TryProcessClientHello(ref reader, clientHelloLength, out authenticationAlgorithms);
 
 		return result;
 	}
@@ -370,22 +373,23 @@ public static class TlsClientHelloParser
 	}
 
 	/// <summary>
-	/// Tries to parse the given bytes as a ClientHello struct and extract supported signature algorithms.
+	/// Tries to parse the given bytes as a ClientHello struct and extract the certificate authentication algorithms
+	/// inferred from it.
 	/// </summary>
 	/// <remarks>ClientHello struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.1.2">RFC 8446 Section 4.1.2</see>.</remarks>
 	/// <param name="reader">The byte sequence reader instance from which the ClientHello bytes are to be read.</param>
 	/// <param name="clientHelloLength">The ClientHello message body length declared in the Handshake header.</param>
-	/// <param name="signatureAlgorithms">The output bitwise flags of signature algorithms extracted from the ClientHello message, if parsing is successful; otherwise, <see cref="TlsSignatureAlgorithms.None"/>.</param>
+	/// <param name="authenticationAlgorithms">The output bitwise flags of certificate authentication algorithms inferred from the ClientHello message, if parsing is successful; otherwise, <see cref="TlsCertificateAuthenticationAlgorithms.None"/>.</param>
 	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static TlsClientHelloParseErrorCode TryProcessClientHello
 	(
 		ref SequenceReader<Byte> reader,
 		Int32 clientHelloLength,
-		out TlsSignatureAlgorithms signatureAlgorithms
+		out TlsCertificateAuthenticationAlgorithms authenticationAlgorithms
 	)
 	{
-		signatureAlgorithms = TlsSignatureAlgorithms.None;
+		authenticationAlgorithms = TlsCertificateAuthenticationAlgorithms.None;
 
 		// Skip ClientHello.legacy_version and ClientHello.random, 34 bytes
 		reader.Advance(34);
@@ -442,13 +446,13 @@ public static class TlsClientHelloParser
 			// Infer server auth algorithms from TLS 1.2 cipher suites.
 			if (tls12AuthSALookup.TryGetValue((TlsCipherSuite) cipherSuite, out var cipherSuiteSignatureAlgorithm))
 			{
-				signatureAlgorithms |= cipherSuiteSignatureAlgorithm;
+				authenticationAlgorithms |= cipherSuiteSignatureAlgorithm;
 			}
 		}
 
 		// TLS 1.2 path: cipher suites should reveal the auth algorithm, so extension parsing is not needed.
 		// TLS 1.3 path: cipher suites do not encode auth algorithm; continue and parse signature_algorithms extension.
-		if (signatureAlgorithms != TlsSignatureAlgorithms.None)
+		if (authenticationAlgorithms != TlsCertificateAuthenticationAlgorithms.None)
 		{
 			return TlsClientHelloParseErrorCode.None;
 		}
@@ -474,28 +478,29 @@ public static class TlsClientHelloParser
 		reader.Advance(legacyCompressionMethodsLength);
 
 		// Check if end is reached
-		// If so then protocol is TLS 1.2 and no signature algorithms found.
+		// If so then protocol is TLS 1.2 and no certificate authentication algorithms were inferred.
 		if (remainingLength == 0)
 		{
 			return TlsClientHelloParseErrorCode.None;
 		}
 
-		return TryProcessClientHelloExtensions(ref reader, remainingLength, ref signatureAlgorithms);
+		return TryProcessClientHelloExtensions(ref reader, remainingLength, ref authenticationAlgorithms);
 	}
 
 	/// <summary>
-	/// Tries to parse the ClientHello extensions and extract supported signature algorithms from the signature_algorithms extension, if present.
+	/// Tries to parse the ClientHello extensions and extract certificate authentication algorithms inferred from the
+	/// <c>signature_algorithms</c> extension, if present.
 	/// </summary>
 	/// <param name="reader">The byte sequence reader instance from which the ClientHello extensions bytes are to be read.</param>
 	/// <param name="remainingLength">The remaining length of the ClientHello message body.</param>
-	/// <param name="signatureAlgorithms">The bitwise flags of signature algorithms extracted so far from the ClientHello message; will be updated with any additional algorithms found in the extensions.</param>
+	/// <param name="authenticationAlgorithms">The bitwise flags of certificate authentication algorithms inferred so far from the ClientHello message; will be updated with any additional algorithms found in the extensions.</param>
 	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static TlsClientHelloParseErrorCode TryProcessClientHelloExtensions
 	(
 		ref SequenceReader<Byte> reader,
 		Int32 remainingLength,
-		ref TlsSignatureAlgorithms signatureAlgorithms
+		ref TlsCertificateAuthenticationAlgorithms authenticationAlgorithms
 	)
 	{
 		// ExtensionType.signature_algorithms enum value
@@ -546,7 +551,7 @@ public static class TlsClientHelloParser
 			// Act depending on the extension type
 			if (extensionType == ExtensionTypeSignatureAlgorithms)
 			{
-				return TryProcessClientHelloExtensionSignatureAlgorithms(ref reader, extensionDataLength, ref signatureAlgorithms);
+				return TryProcessClientHelloExtensionSignatureAlgorithms(ref reader, extensionDataLength, ref authenticationAlgorithms);
 			}
 			else
 			{
@@ -562,7 +567,7 @@ public static class TlsClientHelloParser
 	(
 		ref SequenceReader<Byte> reader,
 		Int32 extensionDataLength,
-		ref TlsSignatureAlgorithms signatureAlgorithms
+		ref TlsCertificateAuthenticationAlgorithms authenticationAlgorithms
 	)
 	{
 		// Read supported_signature_algorithms.length, 2 bytes
@@ -593,7 +598,7 @@ public static class TlsClientHelloParser
 			// Try get signature algorithm
 			if (tls13AuthSALookup.TryGetValue((TlsSignatureScheme) signatureScheme, out var signatureAlgorithm))
 			{
-				signatureAlgorithms |= signatureAlgorithm;
+				authenticationAlgorithms |= signatureAlgorithm;
 			}
 		}
 
