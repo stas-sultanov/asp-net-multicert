@@ -9,7 +9,7 @@ tags:
 ---
 
 Most web servers are built for clients whose security behavior is handled by mainstream general-purpose operating systems.<br>
-In that world, TLS certificate handling is usually straightforward: one server name, one endpoint, one certificate chain, and broad interoperability across the signature algorithms those stacks support.
+In that world, TLS certificate handling by the web server is usually straightforward: one server name, one endpoint, one certificate chain, and broad interoperability across the signature algorithms those stacks support.
 
 The situation is different when clients fall outside that mainstream.
 
@@ -17,18 +17,18 @@ In IoT, device fleets, industrial gateways, legacy SDKs, or application-to-appli
 One client may support only RSA. Another may support only ECDSA. A third may support both.<br>
 All of them still need to connect to the same logical endpoint under the same server identity.
 
-That creates a specific requirement for the server: during the TLS handshake, it must inspect the client's capabilities and present a certificate with a key type and signature algorithm the client supports.
+That creates a specific requirement for the server: during the TLS handshake, it must inspect the client's capabilities and present a certificate with a compatible key type and signature scheme that the client supports.
 
 In this article, I will show how to implement that directly in ASP.NET Core and Kestrel, without moving certificate selection into an edge service such as a reverse proxy or an external gateway.
 
 > ASP.NET implementation, and most of the information available on this topic, focus on SNI-based certificate selection, where different server names map to different certificates, which is not the case here.<br>
 Because of that, LLM-based AI assistants conclude that this scenario is impossible to implement in ASP.NET.
 
-> Note: The reader should have a deep understand of TLS, especially the negotiation phase of the handshake.
+> Note: The reader should have a deep understanding of TLS, especially the negotiation phase of the handshake.
 
 ### Visualization
 
-The visualisation below illustrates the exact case addressed in this article.<br>
+The visualization below illustrates the exact case addressed in this article.<br>
 The backend exposes one endpoint and clients have different capabilities.
 
 ```mermaid
@@ -69,7 +69,7 @@ flowchart LR
 
 ## The Common Approach
 
-The case is not unique and occurs frequently in some areas.<br>
+This case is not unique and occurs frequently in some areas.<br>
 It is often addressed by offloading TLS certificate management to a dedicated edge service placed in front of the web server.<br>
 More specifically, that edge service is often a reverse proxy such as NGINX or HAProxy, or a managed edge gateway such as Azure Application Gateway.
 
@@ -137,7 +137,7 @@ That produces a much cleaner model:
 - There is no extra hop and no extra failure point.
 - TLS management stays with the host that actually owns the endpoint.
 - Certificate selection is implemented exactly where the handshake happens.
-- mTLS-related logic can stay in one place.
+- Mutual TLS (mTLS)-related logic can stay in one place.
 
 ### Visualization
 
@@ -182,40 +182,63 @@ flowchart LR
 
 ## How Server-side Certificate Selection Works
 
-Before moving forward, it is important to align on how server-side certificate selection works.
 
-Server-side certificate selection must happen during the first phase of the TLS handshake: after the client sends [ClientHello][rfc_8446_clienthello] and before the server responds with [ServerHello][rfc_8446_serverhello].
+Before moving forward, it is important to clarify how server-side certificate selection works.
+
+This process must occur during the initial phase of the TLS handshake: after the client sends [ClientHello][rfc_8446_clienthello] and before the server responds with [ServerHello][rfc_8446_serverhello].
 
 The server-side flow is as follows:
 
 1. Receive the incoming TLS record.
-2. Parse the TLS record as [TLSPlaintext][rfc_8446_tlsplaintext] and verify that it carries a [Handshake][rfc_8446_handshake] message whose body is [ClientHello][rfc_8446_clienthello].
-3. Extract the client capabilities relevant to certificate selection from [ClientHello][rfc_8446_clienthello].
-4. Select the appropriate certificate based on client capabilities.
-5. Respond with [ServerHello][rfc_8446_serverhello] caring selected certificate information.
+2. Parse the record as [TLSPlaintext][rfc_8446_tlsplaintext] and verify that it contains a [Handshake][rfc_8446_handshake] message with a [ClientHello][rfc_8446_clienthello] body.
+3. Extract the client capabilities relevant to certificate selection from ClientHello.
+4. Select the appropriate certificate based on those capabilities and your server’s selection policy.
+5. Respond with [ServerHello][rfc_8446_serverhello] and continue handshake, including Certificate message.
 
-The important caveat is that the location of the client capability information required for certificate selection depends on the TLS version used by the client:
-- TLS 1.2: within [ClientHello.cipher_suites][rfc_8446_clienthello].
-- TLS 1.3: in the [SignatureSchemeList][rfc_8446_signature_scheme_list] extension of ClientHello [Extensions][rfc_8446_extensions].
+### How to get client capabilities
 
-That is the entire mechanism.
+To determine which certificates are compatible, the [ClientHello][rfc_8446_clienthello] message must be inspected.
+
+The exact location of the information needed for certificate selection depends on the TLS version:
+
+| Version | Primary Source | Secondary Source
+|:-------:|----------------|----------
+| 1.2     | `signature_algorithms` extension | `cipher_suites` field
+| 1.3     | `signature_algorithms_cert` extension | `signature_algorithms` extension
+
+### How to choose which certificate to present
+
+The actual certificate to present is chosen by considering both the client’s capabilities and the web server’s certificate selection policy.
+
+The specific selection policy is determined by the server implementation and may depend on organizational requirements or security policies.
+
+Typical strategies include:
+- Prefer the certificate with the strongest algorithm supported by both server and client.
+- Present a default certificate if it matches the client’s capabilities.
+- If no compatible certificate is available, abort the handshake.
+
+This is the core mechanism for dynamic certificate selection based on client capabilities.
 
 ## Implement using ASP.NET Core and Kestrel
 
-Since ASP.NET Core 2.1, Kestrel provides [`HttpsConnectionAdapterOptions.ServerCertificateSelector`][ms-learn--server-certificate-selector-docs] for dynamic server certificate selection during TLS negotiation.
 
-That property lets you assign a callback that returns the [`X509Certificate2`][ms-learn--x509certificate2-docs] to use for the connection.
+Since ASP.NET Core 2.1, Kestrel provides the ability to configure TLS handshake behavior via [`HttpsConnectionAdapterOptions`][ms_learn_HttpsConnectionAdapterOption].
 
-Historically, this API was designed for SNI-based certificate selection, where the server name influences which certificate is returned.<br>
-However, nothing prevents using a different certificate-selection logic, such as client capabilities provided in `ClientHello`.
+The `HttpsConnectionAdapterOptions` provides a [`ServerCertificateSelector`][ms_learn_HttpsConnectionAdapterOptions_ServerCertificateSelector] property that allows configuration of a callback that is called during the TLS negotiation phase.
 
-The `ServerCertificateSelector` callback is invoked with an instance of [`ConnectionContext`][ms-learn--connection-context-docs].
+> Historically, this API was designed for SNI-based certificate selection, where the server name influences which certificate is returned.<br>
+However, nothing prevents using a different certificate-selection logic, such as client capabilities provided in `ClientHello` and implementation-specific policies.
 
-A `TLSPlaintext` record that carries a `Handshake` with a `ClientHello` message is stored in the `ConnectionContext` instance and can be accessed through [`IMemoryPoolFeature.MemoryPool`][imemorypoolfeature-docs].
+The method assigned to `ServerCertificateSelector` accepts an argument of type [`ConnectionContext`][ms_learn_ConnectionContext].
 
-Since ASP.NET Core 10.0, Kestrel also provides [`HttpsConnectionAdapterOptions.TlsClientHelloBytesCallback`][ms-learn--tls-client-hello-bytes-callback-docs], which allows inspection of the incoming `TLSPlaintext` as a [`ReadOnlySequence<byte>`][ms-learn--readonlysequence-docs] before the certificate selection callback.
+The [`ConnectionContext`][ms_learn_ConnectionContext] implements the [`IMemoryPoolFeature`][ms_learn_IMemoryPoolFeature] interface, which exposes a [`MemoryPool`][ms_learn_IMemoryPoolFeature_MemoryPool] property.
 
-That is all that is required for the implementation.
+The `MemoryPool` property can be used to access the raw TLS records as bytes sent by the client during the handshake. The relevant TLS record is a `TLSPlaintext` struct that carries a `Handshake` message with a `ClientHello` body. This enables custom parsing of handshake data if needed.
+
+Starting with ASP.NET Core 10.0, `HttpsConnectionAdapterOptions` also provides the [`TlsClientHelloBytesCallback`][ms_learn_HttpsConnectionAdapterOptions_ClientHelloBytesCallback] property.<br>
+This callback enables inspection of the incoming `ClientHello` before the certificate selection callback is invoked.
+
+These APIs provide all the necessary hooks to implement dynamic certificate selection in Kestrel based on client capabilities, not just SNI.
 
 ## Demo
 
@@ -298,7 +321,7 @@ The repository demonstrates:
 - validating behavior with integration tests,
 - handling both TLS 1.2 and TLS 1.3 negotiation paths.
 
-If you need this capability in a real system, the interesting part is not the amount of code. The interesting part is that the mechanism is much closer to the server than many teams assume.
+If you need this capability in a real system, the interesting part is not the amount of code, but that the mechanism is much closer to the server than many teams assume.
 
 Kestrel is already in the handshake path. With the right callback, certificate selection is just another transport decision.
 
@@ -322,12 +345,6 @@ If you found this article useful, feel free to buy the author [a cup of coffee](
 DIA 1
 >> [Mermaid editor link][dia-1]
 
-[ms-learn--server-certificate-selector-docs]: https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.server.kestrel.https.httpsconnectionadapteroptions.servercertificateselector
-[ms-learn--tls-client-hello-bytes-callback-docs]: https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.server.kestrel.https.httpsconnectionadapteroptions.tlsclienthellobytescallback?view=aspnetcore-10.0
-[ms-learn--connection-context-docs]: https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.connections.connectioncontext?view=aspnetcore-10.0
-[ms-learn--readonlysequence-docs]: https://learn.microsoft.com/dotnet/api/system.buffers.readonlysequence-1
-[ms-learn--x509certificate2-docs]: https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509certificate2
-[imemorypoolfeature-docs]: https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.connections.features.imemorypoolfeature
 [demo-repo]: https://github.com/stas-sultanov/asp-net-multicert
 [dia-1]: https://mermaid.ai/play?utm_source=mermaid_live_editor&utm_medium=main_menu#pako:eNqVUl1LwzAU_Suhw7cVdN2XQcR2bZ4URH1zMrI0W4sxiUmGDvG_m6Qf026Ku9BCzz33nJybfgRE5DSAwYqJN1JgZcD13ZyfnABucT3nwNYSk2fK84V9pCi5eZwHSQWBrIbmwVPFJayk3CzMVtIFJbnGljzzGHAYSC6W6lJvpBTKaJDN0vsYCM62BwXU3nj8Y_zur-GlMEVnerY3jV0GdwgvYWOvldjIOrfeLNcKy6JZwC53a-jKMH2DOV5TZQkP1_fO5KUCfvCwlJZg36wk2JSCt12n6MwVZb6hD64CXITh5d5lHA7-X66_or_IXRSEYfgtcUXafVdSNqPPo82W_fYTXX0AXWBJIVipkJSKfNab2olBCOPXDa5xK2qBW4pJUSOd_Ti6PtRzC_m16TfwvUsY1jqlK2ARm0CJZxq-lbmVOJPv_QbJsT29UngLueC0gWHv3FcfrErGYC_z1QdEMKFg79RX18ZGPN5nOM7S2bTxSTOE0LT1iSbTbBJ3fG5LTo_3GYyGUTRufAaT8WgYtz7IV9fH3dDxRihJolHcGCGUoTRpjaZoHA3S4PMLwVSSEw
 [rfc_8446]: https://www.rfc-editor.org/rfc/rfc8446
@@ -337,3 +354,10 @@ DIA 1
 [rfc_8446_serverhello]: https://www.rfc-editor.org/rfc/rfc8446#section-4.1.3
 [rfc_8446_extensions]: https://www.rfc-editor.org/rfc/rfc8446#section-4.2
 [rfc_8446_signature_scheme_list]: https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3
+[ms_learn_HttpsConnectionAdapterOption]: https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.server.kestrel.https.httpsconnectionadapteroptions
+[ms_learn_HttpsConnectionAdapterOptions_ServerCertificateSelector]: https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.server.kestrel.https.httpsconnectionadapteroptions.servercertificateselector
+[ms_learn_HttpsConnectionAdapterOptions_ClientHelloBytesCallback]: https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.server.kestrel.https.httpsconnectionadapteroptions.tlsclienthellobytescallback
+[ms_learn_ConnectionContext]: https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.connections.connectioncontext
+[ms_learn_IMemoryPoolFeature]: https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.connections.features.imemorypoolfeature
+[ms_learn_IMemoryPoolFeature_MemoryPool]: https://learn.microsoft.com/dotnet/api/microsoft.aspnetcore.connections.features.imemorypoolfeature.memorypool
+[ms-learn-X509Certificate2]: https://learn.microsoft.com/dotnet/api/system.security.cryptography.x509certificates.x509certificate2

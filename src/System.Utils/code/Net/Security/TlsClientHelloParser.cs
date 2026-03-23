@@ -11,6 +11,7 @@ using System.Runtime.CompilerServices;
 /// </summary>
 /// <remarks>
 /// Designed according to <see href="https://www.rfc-editor.org/rfc/rfc8446">RFC 8446</see> and <see href="https://www.rfc-editor.org/rfc/rfc5246">RFC 5246</see>.
+/// With performance considerations in mind, to be used in the hot path of TLS record processing for server certificate selection based on ClientHello capabilities.
 /// </remarks>
 public static class TlsClientHelloParser
 {
@@ -196,7 +197,7 @@ public static class TlsClientHelloParser
 	/// <remarks>ClientHello struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.1.2">RFC 8446 Section 4.1.2</see> and <see href="https://www.rfc-editor.org/rfc/rfc5246#section-7.4.1.2">RFC 5246 Section 7.4.1.2</see>.</remarks>
 	/// <param name="reader">The byte sequence reader instance from which the ClientHello bytes are to be read.</param>
 	/// <param name="clientHelloLength">The ClientHello message body length declared in the Handshake header.</param>
-	/// <param name="info">The output bitwise flags of certificate authentication algorithms inferred from the ClientHello message, if parsing is successful; otherwise, <see cref="TlsCertificateAuthenticationAlgorithms.None"/>.</param>
+	/// <param name="info">The output bitwise flags of certificate authentication algorithms inferred from the ClientHello message, if parsing is successful; otherwise, default.</param>
 	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static TlsClientHelloParseErrorCode TryProcessClientHello
@@ -400,7 +401,7 @@ public static class TlsClientHelloParser
 	/// <summary>
 	/// Tries to parse the <c>signature_algorithms</c>-style extension and capture its raw payload.
 	/// </summary>
-	/// <remarks>SignatureSchemeList struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see> and <see href="https://www.rfc-editor.org/rfc/rfc5246#section-7.4.1.2">RFC 5246 Section 7.4.1.2</see>.</remarks>
+	/// <remarks>SignatureSchemeList struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see> and <see href="https://www.rfc-editor.org/rfc/rfc5246#section-7.4.1.4.1">RFC 5246 Section 7.4.1.4.1</see>.</remarks>
 	/// <param name="reader">The byte sequence reader instance from which the extension bytes are to be read.</param>
 	/// <param name="extensionDataLength">The length of the extension data.</param>
 	/// <param name="signatureAlgorithms">The raw bytes of the signature schemes list, if parsing is successful; otherwise, <c>default</c>.</param>

@@ -265,14 +265,17 @@ public sealed class TlsClientHelloParserTests
 	[TestMethod]
 	public void TryParse_Succeed_If_ClientHelloTls13_IsValidWithSignatureAlgorithms()
 	{
-		var expectedAuthenticationAlgorithms = new TlsSignatureScheme[] { TlsSignatureScheme.rsa_pkcs1_sha256, TlsSignatureScheme.ecdsa_secp521r1_sha512 };
+		var expectedAuthenticationAlgorithms = new TlsSignatureScheme[]
+		{
+			TlsSignatureScheme.rsa_pkcs1_sha256,
+			TlsSignatureScheme.ecdsa_secp521r1_sha512
+		};
+
 		var signatureScheme = TlsHelper.BuildSignatureSchemeList(4, Array.ConvertAll(expectedAuthenticationAlgorithms, value => (UInt16) value));
-
 		var extension = TlsHelper.BuildExtension(0x000d, (UInt16) signatureScheme.Length, signatureScheme);
-
 		var clientHello = TlsHelper.BuildClientHelloTls13(extension);
-
 		var expectedErrorCode = TlsClientHelloParseErrorCode.None;
+
 		TestTryParseClientHello(clientHello, expectedErrorCode, info =>
 		{
 			var signatureSchemes = new TlsSignatureScheme[info.SignatureAlgorithmsCount];
@@ -284,14 +287,16 @@ public sealed class TlsClientHelloParserTests
 	[TestMethod]
 	public void TryParse_Succeed_If_ClientHelloTls13_IsValidWithSignatureAlgorithmsCert()
 	{
-		var expectedAuthenticationAlgorithms = new TlsSignatureScheme[] { TlsSignatureScheme.ed25519, TlsSignatureScheme.rsa_pkcs1_sha384 };
+		var expectedAuthenticationAlgorithms = new TlsSignatureScheme[]
+		{
+			TlsSignatureScheme.ed25519, TlsSignatureScheme.rsa_pkcs1_sha384
+		};
+
 		var signatureScheme = TlsHelper.BuildSignatureSchemeList(4, Array.ConvertAll(expectedAuthenticationAlgorithms, value => (UInt16) value));
-
 		var extension = TlsHelper.BuildExtension(50, (UInt16) signatureScheme.Length, signatureScheme);
-
 		var clientHello = TlsHelper.BuildClientHelloTls13(extension);
-
 		var expectedErrorCode = TlsClientHelloParseErrorCode.None;
+
 		TestTryParseClientHello(clientHello, expectedErrorCode, info =>
 		{
 			var signatureSchemesCert = new TlsSignatureScheme[info.SignatureAlgorithmsCertCount];
