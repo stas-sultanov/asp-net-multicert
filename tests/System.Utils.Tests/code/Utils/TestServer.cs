@@ -147,11 +147,11 @@ internal sealed class TestServer
 	/// </summary>
 	private static void OnTlsClientHelloBytes(ConnectionContext connectionContext, ReadOnlySequence<Byte> data)
 	{
-		var cipherSuitParseResult = TlsClientHelloParser.TryParse(data, out var authenticationAlgorithms);
+		var cipherSuitParseResult = TlsClientHelloParser.TryParse(data, out _);
 
 		if (cipherSuitParseResult == TlsClientHelloParseErrorCode.None)
 		{
-			connectionContext.Items[ConnectionContextItemsKeyAuthenticationAlgorithmsName] = authenticationAlgorithms;
+			//connectionContext.Items[ConnectionContextItemsKeyAuthenticationAlgorithmsName] = authenticationAlgorithms;
 		}
 		else
 		{

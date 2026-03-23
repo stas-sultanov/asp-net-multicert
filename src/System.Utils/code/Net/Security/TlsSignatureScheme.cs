@@ -6,33 +6,82 @@ namespace System.Net.Security;
 /// <summary>
 /// SignatureScheme enum as defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
 /// </summary>
-internal enum TlsSignatureScheme : UInt16
+#pragma warning disable CA1028 // Enum Storage should be Int32
+public enum TlsSignatureScheme : UInt16
+#pragma warning restore CA1028 // Enum Storage should be Int32
 {
-	/* RSASSA-PKCS1-v1_5 algorithms */
+	/// <summary>
+	/// Indicates that no signature scheme is offered, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
+	None = 0x0000,
+
+	/// <summary>
+	/// RSASSA-PKCS1-v1_5 with SHA-256, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pkcs1_sha256 = 0x0401,
+	/// <summary>
+	/// RSASSA-PKCS1-v1_5 with SHA-384, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pkcs1_sha384 = 0x0501,
+	/// <summary>
+	/// RSASSA-PKCS1-v1_5 with SHA-512, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pkcs1_sha512 = 0x0601,
 
-	/* ECDSA algorithms */
+	/// <summary>
+	/// ECDSA over the secp256r1 curve with SHA-256, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	ecdsa_secp256r1_sha256 = 0x0403,
+	/// <summary>
+	/// ECDSA over the secp384r1 curve with SHA-384, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	ecdsa_secp384r1_sha384 = 0x0503,
+	/// <summary>
+	/// ECDSA over the secp521r1 curve with SHA-512, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	ecdsa_secp521r1_sha512 = 0x0603,
 
-	/* RSASSA-PSS algorithms with public key OID rsaEncryption */
+	/// <summary>
+	/// RSASSA-PSS with SHA-256 and a public key with OID rsaEncryption, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pss_rsae_sha256 = 0x0804,
+	/// <summary>
+	/// RSASSA-PSS with SHA-384 and a public key with OID rsaEncryption, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pss_rsae_sha384 = 0x0805,
+	/// <summary>
+	/// RSASSA-PSS with SHA-512 and a public key with OID rsaEncryption, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pss_rsae_sha512 = 0x0806,
 
-	/* EdDSA algorithms */
+	/// <summary>
+	/// Ed25519, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	ed25519 = 0x0807,
+	/// <summary>
+	/// Ed448, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	ed448 = 0x0808,
 
-	/* RSASSA-PSS algorithms with public key OID RSASSA-PSS */
+	/// <summary>
+	/// RSASSA-PSS with SHA-256 and a public key with OID RSASSA-PSS, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pss_pss_sha256 = 0x0809,
+	/// <summary>
+	/// RSASSA-PSS with SHA-384 and a public key with OID RSASSA-PSS, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pss_pss_sha384 = 0x080a,
+	/// <summary>
+	/// RSASSA-PSS with SHA-512 and a public key with OID RSASSA-PSS, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pss_pss_sha512 = 0x080b,
 
-	/* Legacy algorithms */
+	/// <summary>
+	/// Legacy RSASSA-PKCS1-v1_5 with SHA-1, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	rsa_pkcs1_sha1 = 0x0201,
+	/// <summary>
+	/// Legacy ECDSA with SHA-1, as defined by <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
+	/// </summary>
 	ecdsa_sha1 = 0x0203
 }
