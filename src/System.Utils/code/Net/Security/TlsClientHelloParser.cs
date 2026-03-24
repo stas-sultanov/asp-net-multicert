@@ -28,17 +28,15 @@ public static class TlsClientHelloParser
 	#region Public Methods
 
 	/// <summary>
-	/// Tries to parse the given bytes as a ClientHello message carried in TLS,
-	/// and extract the certificate authentication algorithms inferred from that ClientHello
-	/// for server certificate selection.
+	/// Tries to parse the given bytes as a TLSPlaintext struct containing a Handshake message with a ClientHello.
 	/// </summary>
-	/// <param name="data">The bytes that should represent the TLS ClientHello message, starting from the beginning of the TLS record.</param>
+	/// <param name="data">The bytes that should represent the TLS record.</param>
 	/// <param name="info">The output <see cref="TlsClientHelloInfo"/> containing information about the ClientHello message, if parsing is successful; otherwise, <c>default</c>.</param>
 	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public static TlsClientHelloParseErrorCode TryParse
 	(
-		ReadOnlySequence<Byte> data,
+		in ReadOnlySequence<Byte> data,
 		out TlsClientHelloInfo info
 	)
 	{
@@ -78,7 +76,7 @@ public static class TlsClientHelloParser
 		}
 
 		// ClientHello message containing capabilities
-		result = TryProcessClientHello(reader, clientHelloLength, out info);
+		result = TryProcessClientHello(ref reader, clientHelloLength, out info);
 
 		return result;
 	}
@@ -97,11 +95,11 @@ public static class TlsClientHelloParser
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static TlsClientHelloParseErrorCode TryProcessRecord
 	(
-		ref SequenceReader<Byte> reader,
+		scoped ref SequenceReader<Byte> reader,
 		out UInt16 handshakeLength
 	)
 	{
-		// ContentType.handshake enum value.
+		// ContentType.handshake enum value
 		const Byte ContentTypeHandshake = 0x16;
 
 		// Read TLSPlaintext.type, 1 byte
@@ -144,18 +142,18 @@ public static class TlsClientHelloParser
 	/// </summary>
 	/// <remarks>Handshake struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4">RFC 8446 Section 4</see> and <see href="https://www.rfc-editor.org/rfc/rfc5246#section-7.4">RFC 5246 Section 7.4</see>.</remarks>
 	/// <param name="reader">The byte sequence reader.</param>
-	/// <param name="handshakeLength">The Handshake message payload length declared in the TLS record header.</param>
+	/// <param name="dataLength">The length of the data available for the processing.</param>
 	/// <param name="clientHelloLength">The output length of the ClientHello message body as declared in the Handshake message header, if parsing is successful; otherwise, zero.</param>
 	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static TlsClientHelloParseErrorCode TryProcessHandshake
 	(
-		ref SequenceReader<Byte> reader,
-		UInt32 handshakeLength,
+		scoped ref SequenceReader<Byte> reader,
+		UInt32 dataLength,
 		out Int32 clientHelloLength
 	)
 	{
-		// HandshakeType.client_hello enum value.
+		// HandshakeType.client_hello enum value
 		const Byte HandshakeTypeClientHello = 0x01;
 
 		// Read Handshake.msg_type, 1 byte
@@ -182,7 +180,7 @@ public static class TlsClientHelloParser
 		// Validate Handshake.length
 		// must be at least the minimum size of TLS 1.2 ClientHello body (41 bytes)
 		// must not exceed the remaining bytes in the Handshake message
-		if ((clientHelloLength < 41) || (clientHelloLength > handshakeLength - HandshakeHeaderSize))
+		if ((clientHelloLength < 41) || (clientHelloLength > dataLength - HandshakeHeaderSize))
 		{
 			return TlsClientHelloParseErrorCode.Handshake_Length_ValueIsInvalid;
 		}
@@ -191,19 +189,18 @@ public static class TlsClientHelloParser
 	}
 
 	/// <summary>
-	/// Tries to parse the given bytes as a ClientHello struct and extract the certificate authentication algorithms
-	/// inferred from it.
+	/// Tries to parse the given bytes as a ClientHello struct.
 	/// </summary>
 	/// <remarks>ClientHello struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.1.2">RFC 8446 Section 4.1.2</see> and <see href="https://www.rfc-editor.org/rfc/rfc5246#section-7.4.1.2">RFC 5246 Section 7.4.1.2</see>.</remarks>
-	/// <param name="reader">The byte sequence reader instance from which the ClientHello bytes are to be read.</param>
-	/// <param name="clientHelloLength">The ClientHello message body length declared in the Handshake header.</param>
+	/// <param name="reader">The byte sequence reader.</param>
+	/// <param name="dataLength">The length of the data available for the processing.</param>
 	/// <param name="info">The output bitwise flags of certificate authentication algorithms inferred from the ClientHello message, if parsing is successful; otherwise, default.</param>
 	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static TlsClientHelloParseErrorCode TryProcessClientHello
 	(
-		SequenceReader<Byte> reader,
-		Int32 clientHelloLength,
+		scoped ref SequenceReader<Byte> reader,
+		Int32 dataLength,
 		out TlsClientHelloInfo info
 	)
 	{
@@ -217,10 +214,10 @@ public static class TlsClientHelloParser
 			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
-		// Remaining length of the ClientHello body in bytes.
+		// Remaining length of the ClientHello body in bytes
 		// 38 accounts for: 34 bytes already consumed (legacy_version + random), 1 byte just read (legacy_session_id.length),
-		// 2 bytes for the cipher_suites.length field, and 1 byte for the legacy_compression_methods.length field.
-		var remainingLength = clientHelloLength - 38 - legacySessionIdLength;
+		// 2 bytes for the cipher_suites.length field, and 1 byte for the legacy_compression_methods.length field
+		var remainingLength = dataLength - 38 - legacySessionIdLength;
 
 		// Validate ClientHello.legacy_session_id.length
 		// must not be greater than 32
@@ -253,7 +250,7 @@ public static class TlsClientHelloParser
 			return TlsClientHelloParseErrorCode.ClientHello_CipherSuitesLength_ValueIsInvalid;
 		}
 
-		// Create a slice of the cipher suites bytes.
+		// Create a slice of the cipher suites bytes
 		var cipherSuites = reader.UnreadSequence.Slice(0, cipherSuitesLength);
 
 		// Skip ClientHello.cipher_suites.data, length bytes
@@ -281,48 +278,59 @@ public static class TlsClientHelloParser
 		// Skip ClientHello.legacy_compression_methods.data, length bytes
 		reader.Advance(legacyCompressionMethodsLength);
 
-		// Check if end is reached.
-		// If not, parse the extensions block so its structure is validated and relevant extension payloads can be captured.
+		ReadOnlySequence<Byte> signatureAlgorithms, signatureAlgorithmsCert;
+
+		// According to TLS 1.2 ClientHello.extensions is optional
+		// so if there are no bytes left to read, we can return the info with just the cipher suites.
 		if (remainingLength == 0)
 		{
-			info = new TlsClientHelloInfo(cipherSuites, default, default);
-			return TlsClientHelloParseErrorCode.None;
+			signatureAlgorithms = default;
+			signatureAlgorithmsCert = default;
+		}
+		else
+		{
+			// Process ClientHello.extensions
+			var result = TryProcessExtensions(ref reader, remainingLength, out signatureAlgorithms, out signatureAlgorithmsCert);
+
+			if (result != TlsClientHelloParseErrorCode.None)
+			{
+				info = default;
+				return result;
+			}
 		}
 
-		var result = TryProcessClientHelloExtensions(ref reader, remainingLength, out var signatureAlgorithms, out var signatureAlgorithmsCert);
+		// Assign output
+		info = new TlsClientHelloInfo(cipherSuites, signatureAlgorithms, signatureAlgorithmsCert);
 
-		info = result == TlsClientHelloParseErrorCode.None
-			? new TlsClientHelloInfo(cipherSuites, signatureAlgorithms, signatureAlgorithmsCert)
-			: default;
-
-		return result;
+		return TlsClientHelloParseErrorCode.None;
 	}
 
 	/// <summary>
-	/// Tries to parse the ClientHello extensions and capture the raw values of the
-	/// <c>signature_algorithms</c> and <c>signature_algorithms_cert</c> extensions, if present.
+	/// Tries to parse the given bytes as a ClientHello.extensions.
 	/// </summary>
-	/// <param name="reader">The byte sequence reader instance from which the ClientHello extensions bytes are to be read.</param>
-	/// <param name="remainingLength">The remaining length of the ClientHello message body.</param>
+	/// <remarks>Extension struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2">RFC 8446 Section 4.2</see> and <see href="https://www.rfc-editor.org/rfc/rfc5246#section-7.4.1.4">RFC 5246 Section 7.4.1.4</see>.</remarks>
+	/// <param name="reader">The byte sequence reader.</param>
+	/// <param name="dataLength">The length of the data available for the processing.</param>
 	/// <param name="signatureAlgorithms">The raw bytes of the <c>signature_algorithms</c> extension payload, if present; otherwise, <c>default</c>.</param>
 	/// <param name="signatureAlgorithmsCert">The raw bytes of the <c>signature_algorithms_cert</c> extension payload, if present; otherwise, <c>default</c>.</param>
 	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static TlsClientHelloParseErrorCode TryProcessClientHelloExtensions
+	private static TlsClientHelloParseErrorCode TryProcessExtensions
 	(
-		ref SequenceReader<Byte> reader,
-		Int32 remainingLength,
+		scoped ref SequenceReader<Byte> reader,
+		Int32 dataLength,
 		out ReadOnlySequence<Byte> signatureAlgorithms,
 		out ReadOnlySequence<Byte> signatureAlgorithmsCert
 	)
 	{
-		signatureAlgorithms = default;
-		signatureAlgorithmsCert = default;
-
 		// ExtensionType.signature_algorithms enum value
 		const Int32 ExtensionTypeSignatureAlgorithms = 13;
 		// ExtensionType.signature_algorithms_cert enum value
 		const Int32 ExtensionTypeSignatureAlgorithmsCert = 50;
+
+		// Will be set in any case or need another variable
+		signatureAlgorithms = default;
+		signatureAlgorithmsCert = default;
 
 		// Read ClientHello.extensions.length, 2 bytes
 		if (!reader.TryReadBigEndian(out UInt16 extensionsLength))
@@ -331,18 +339,18 @@ public static class TlsClientHelloParser
 		}
 
 		// Adjust remaining length
-		remainingLength -= 2;
+		dataLength -= 2;
 
 		// Validate ClientHello.extensions.length
 		// must be between 8 and 65535
 		// must not exceed the remaining bytes in the declared ClientHello body
-		if ((remainingLength - extensionsLength) < 0 || extensionsLength < 8)
+		if ((dataLength - extensionsLength) < 0 || extensionsLength < 8)
 		{
 			return TlsClientHelloParseErrorCode.ClientHello_ExtensionsLength_ValueIsInvalid;
 		}
 
 		// Read ClientHello.extensions.data
-		while (remainingLength > 0)
+		while (dataLength > 0)
 		{
 			// Read Extension.extension_type
 			if (!reader.TryReadBigEndian(out UInt16 extensionType))
@@ -357,11 +365,11 @@ public static class TlsClientHelloParser
 			}
 
 			// Adjust remaining length
-			remainingLength -= 4 + extensionDataLength;
+			dataLength -= 4 + extensionDataLength;
 
 			// Validate Extension.extension_data.length
 			// must not exceed the remaining bytes in the extensions block
-			if (remainingLength < 0)
+			if (dataLength < 0)
 			{
 				return TlsClientHelloParseErrorCode.Extension_ExtensionDataLength_ValueIsInvalid;
 			}
@@ -370,9 +378,10 @@ public static class TlsClientHelloParser
 			{
 				case ExtensionTypeSignatureAlgorithms:
 					{
-						var parseResult = TryProcessClientHelloExtensionSignatureAlgorithms(ref reader, extensionDataLength, out signatureAlgorithms);
+						var parseResult = TryProcessSignatureSchemeList(ref reader, extensionDataLength, out signatureAlgorithms);
 						if (parseResult != TlsClientHelloParseErrorCode.None)
 						{
+							signatureAlgorithmsCert = default;
 							return parseResult;
 						}
 
@@ -380,9 +389,10 @@ public static class TlsClientHelloParser
 					}
 				case ExtensionTypeSignatureAlgorithmsCert:
 					{
-						var parseResult = TryProcessClientHelloExtensionSignatureAlgorithms(ref reader, extensionDataLength, out signatureAlgorithmsCert);
+						var parseResult = TryProcessSignatureSchemeList(ref reader, extensionDataLength, out signatureAlgorithmsCert);
 						if (parseResult != TlsClientHelloParseErrorCode.None)
 						{
+							signatureAlgorithms = default;
 							return parseResult;
 						}
 
@@ -399,38 +409,41 @@ public static class TlsClientHelloParser
 	}
 
 	/// <summary>
-	/// Tries to parse the <c>signature_algorithms</c>-style extension and capture its raw payload.
+	/// Tries to parse the given bytes as a SignatureSchemeList struct.
 	/// </summary>
-	/// <remarks>SignatureSchemeList struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see> and <see href="https://www.rfc-editor.org/rfc/rfc5246#section-7.4.1.4.1">RFC 5246 Section 7.4.1.4.1</see>.</remarks>
-	/// <param name="reader">The byte sequence reader instance from which the extension bytes are to be read.</param>
-	/// <param name="extensionDataLength">The length of the extension data.</param>
-	/// <param name="signatureAlgorithms">The raw bytes of the signature schemes list, if parsing is successful; otherwise, <c>default</c>.</param>
+	/// <remarks>SignatureSchemeList struct defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.</remarks>
+	/// <param name="reader">The byte sequence reader.</param>
+	/// <param name="dataLength">The length of the data available for the processing.</param>
+	/// <param name="signatureAlgorithms">The output slice of the signature algorithms bytes, if parsing is successful; otherwise, <c>default</c>.</param>
 	/// <returns>A <see cref="TlsClientHelloParseErrorCode"/> indicating the result of the operation.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	private static TlsClientHelloParseErrorCode TryProcessClientHelloExtensionSignatureAlgorithms
+	private static TlsClientHelloParseErrorCode TryProcessSignatureSchemeList
 	(
-		ref SequenceReader<Byte> reader,
-		Int32 extensionDataLength,
+		scoped ref SequenceReader<Byte> reader,
+		Int32 dataLength,
 		out ReadOnlySequence<Byte> signatureAlgorithms
 	)
 	{
-		// Read supported_signature_algorithms.length, 2 bytes
+		// Read SignatureSchemeList.supported_signature_algorithms.length, 2 bytes
 		if (!reader.TryReadBigEndian(out UInt16 supportedSignatureAlgorithmsLength))
 		{
 			signatureAlgorithms = default;
 			return TlsClientHelloParseErrorCode.ReadError;
 		}
 
-		// Validate supported_signature_algorithms.length
+		// Validate SignatureSchemeList.supported_signature_algorithms.length
 		// must be non-zero and a multiple of 2, since each signature scheme is represented by 2 bytes
-		// must not exceed the bytes available inside this extension (extensionDataLength - 2 bytes already read for the length field)
-		if (supportedSignatureAlgorithmsLength == 0 || (supportedSignatureAlgorithmsLength % 2) != 0 || (2 + supportedSignatureAlgorithmsLength) > extensionDataLength)
+		// must not exceed the bytes available for read
+		if (supportedSignatureAlgorithmsLength == 0 || (supportedSignatureAlgorithmsLength % 2) != 0 || (2 + supportedSignatureAlgorithmsLength) > dataLength)
 		{
 			signatureAlgorithms = default;
-			return TlsClientHelloParseErrorCode.SignatureAlgorithm_SupportedSignatureAlgorithmsLength_ValueIsInvalid;
+			return TlsClientHelloParseErrorCode.SignatureSchemeList_SupportedSignatureAlgorithmsLength_ValueIsInvalid;
 		}
 
+		// Create a slice
 		signatureAlgorithms = reader.UnreadSequence.Slice(0, supportedSignatureAlgorithmsLength);
+
+		// Skip SignatureSchemeList.supported_signature_algorithms.data, length bytes
 		reader.Advance(supportedSignatureAlgorithmsLength);
 
 		return TlsClientHelloParseErrorCode.None;

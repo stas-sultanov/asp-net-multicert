@@ -142,6 +142,7 @@ dotnet_analyzer_diagnostic.category-Style.severity = warning
 
 #### Diagnostic ####
 
+dotnet_diagnostic.CA1028.severity = none
 dotnet_diagnostic.CA1062.severity = none
 dotnet_diagnostic.CA1307.severity = none
 dotnet_diagnostic.CA1510.severity = none

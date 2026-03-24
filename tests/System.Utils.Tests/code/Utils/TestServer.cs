@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Security;
 using System.Runtime.Versioning;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 using Microsoft.AspNetCore.Builder;
@@ -26,10 +27,10 @@ internal sealed class TestServer
 	#region Fields
 
 	/// <summary>
-	/// The key used to store the parsed <see cref="TlsCertificateAuthenticationAlgorithms"/> value
+	/// The key used to store the parsed <see cref="AuthenticationAlgorithm"/> value
 	/// in <see cref="ConnectionContext"/> during the TLS handshake.
 	/// </summary>
-	private const String ConnectionContextItemsKeyAuthenticationAlgorithmsName = "AuthenticationAlgorithms";
+	private const String AuthenticationAlgorithmKey = "AuthenticationAlgorithm";
 
 	/// <summary>
 	/// The set of TLS cipher suites the server is restricted to.
@@ -51,7 +52,7 @@ internal sealed class TestServer
 	private readonly X509Certificate2 certificateECDsa;
 
 	/// <summary>Self-signed RSA certificate used when the client supports RSA certificate authentication.</summary>
-	private readonly X509Certificate2 certificateRSA;
+	private readonly X509Certificate2 certificate_rsa_pkcs1_sha256;
 
 	#endregion
 
@@ -67,7 +68,8 @@ internal sealed class TestServer
 
 		certificateECDsa = certificateHelper.CreateSelfSignedCertificateECDsa();
 
-		certificateRSA = certificateHelper.CreateSelfSignedCertificateRSA();
+		// rsa_pkcs1_sha256
+		certificate_rsa_pkcs1_sha256 = certificateHelper.CreateSelfSignedCertificateRSA(RSASignaturePadding.Pkcs1, HashAlgorithmName.SHA256);
 	}
 
 	#endregion
@@ -145,17 +147,21 @@ internal sealed class TestServer
 	/// and stores them in <see cref="ConnectionContext"/> for later use by <see cref="SelectCertifiacte"/>.
 	/// If parsing fails, the error code is stored instead.
 	/// </summary>
+	/// <param name="connectionContext">The connection context for the incoming TLS connection.</param>
+	/// <param name="data">The raw bytes of the TLS ClientHello message.</param>
 	private static void OnTlsClientHelloBytes(ConnectionContext connectionContext, ReadOnlySequence<Byte> data)
 	{
-		var cipherSuitParseResult = TlsClientHelloParser.TryParse(data, out _);
+		var parseResult = TlsClientHelloParser.TryParse(data, out var clientHelloInfo);
 
-		if (cipherSuitParseResult == TlsClientHelloParseErrorCode.None)
+		if (parseResult != TlsClientHelloParseErrorCode.None)
 		{
-			//connectionContext.Items[ConnectionContextItemsKeyAuthenticationAlgorithmsName] = authenticationAlgorithms;
+			connectionContext.Items["CipherSuiteParseErrorCode"] = parseResult;
+			return;
 		}
-		else
+
+		if (CertificateSelector.TrySelectAlogrithm(clientHelloInfo, out var authenticationAlgorithm))
 		{
-			connectionContext.Items["CipherSuiteParseErrorCode"] = cipherSuitParseResult;
+			connectionContext.Items[AuthenticationAlgorithmKey] = authenticationAlgorithm;
 		}
 	}
 
@@ -174,7 +180,7 @@ internal sealed class TestServer
 	/// <param name="_">The server name indication value (unused).</param>
 	/// <returns>
 	/// The <see cref="certificateECDsa"/> if the client supports ECDSA,
-	/// the <see cref="certificateRSA"/> if the client supports RSA,
+	/// the <see cref="certificate_rsa_pkcs1_sha256"/> if the client supports RSA,
 	/// or <see langword="null"/> if the context is missing or parsing failed.
 	/// </returns>
 	private X509Certificate2? SelectCertifiacte(ConnectionContext? context, String? _)
@@ -184,24 +190,24 @@ internal sealed class TestServer
 			return null;
 		}
 
-		if (!context.Items.TryGetValue(ConnectionContextItemsKeyAuthenticationAlgorithmsName, out var authenticationAlgorithmsObj))
+		if (!context.Items.TryGetValue(AuthenticationAlgorithmKey, out var authenticationAlgorithmsObj))
 		{
 			return null;
 		}
 
-		if (authenticationAlgorithmsObj is not TlsCertificateAuthenticationAlgorithms authenticationAlgorithms)
+		if (authenticationAlgorithmsObj is not AuthenticationAlgorithm authenticationAlgorithms)
 		{
 			return null;
 		}
 
-		if (authenticationAlgorithms.HasFlag(TlsCertificateAuthenticationAlgorithms.ECDSA))
+		if (authenticationAlgorithms.HasFlag(AuthenticationAlgorithm.ECDSA))
 		{
 			return certificateECDsa;
 		}
 
-		if (authenticationAlgorithms.HasFlag(TlsCertificateAuthenticationAlgorithms.RSA))
+		if (authenticationAlgorithms.HasFlag(AuthenticationAlgorithm.RSA))
 		{
-			return certificateRSA;
+			return certificate_rsa_pkcs1_sha256;
 		}
 
 		return null;

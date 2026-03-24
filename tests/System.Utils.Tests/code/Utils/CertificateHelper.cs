@@ -77,9 +77,13 @@ internal sealed class CertificateHelper
 	/// Creates a self-signed certificate using the RSA algorithm with the specified key size.
 	/// </summary>
 	/// <param name="keySizeInBits">The size of the RSA key in bits.</param>
+	/// <param name="hashAlgorithm">The hash algorithm to use when signing the certificate.</param>
+	/// <param name="padding">The RSA signature padding mode to use when signing the certificate.</param>
 	/// <returns>A self-signed X509Certificate2 instance.</returns>
 	public X509Certificate2 CreateSelfSignedCertificateRSA
 	(
+		RSASignaturePadding padding,
+		HashAlgorithmName hashAlgorithm,
 		Int32 keySizeInBits = 2048
 	)
 	{
@@ -88,7 +92,7 @@ internal sealed class CertificateHelper
 
 		// RSA signatures require a padding scheme.
 		// RSASignaturePadding.Pkcs1 implements PKCS#1 v1.5 signature encoding
-		var request = new CertificateRequest(SubjectName, key, HashAlgorithmName, RSASignaturePadding.Pkcs1);
+		var request = new CertificateRequest(SubjectName, key, hashAlgorithm, padding);
 
 		var keyUsageExtension = new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature | X509KeyUsageFlags.KeyEncipherment, false);
 

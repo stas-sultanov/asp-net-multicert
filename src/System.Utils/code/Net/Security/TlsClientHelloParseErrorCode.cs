@@ -4,6 +4,19 @@
 namespace System.Net.Security;
 
 /// <summary>
+/// Defines error code groups for the <see cref="TlsClientHelloParseErrorCode"/> enum.
+/// </summary>
+file static class ErrorCodeGroup
+{
+	public const Int32 Data               = 0x0100;
+	public const Int32 Record             = 0x0200;
+	public const Int32 Handshake          = 0x0300;
+	public const Int32 ClientHello        = 0x0400;
+	public const Int32 Extension          = 0x0500;
+	public const Int32 SignatureAlgorithm = 0x0600;
+}
+
+/// <summary>
 /// Defines error codes for the <see cref="TlsClientHelloParser.TryParse"/> method.
 /// </summary>
 public enum TlsClientHelloParseErrorCode
@@ -74,17 +87,7 @@ public enum TlsClientHelloParseErrorCode
 	Extension_ExtensionDataLength_ValueIsInvalid = ErrorCodeGroup.Extension | 0x01,
 
 	/// <summary>
-	/// The supported_signature_algorithms.length field value is invalid.
+	/// The SignatureSchemeList.supported_signature_algorithms.length field value is invalid.
 	/// </summary>
-	SignatureAlgorithm_SupportedSignatureAlgorithmsLength_ValueIsInvalid = ErrorCodeGroup.SignatureAlgorithm | 0x01
-}
-
-file static class ErrorCodeGroup
-{
-	public const Int32 Data               = 0x0100;
-	public const Int32 Record             = 0x0200;
-	public const Int32 Handshake          = 0x0300;
-	public const Int32 ClientHello        = 0x0400;
-	public const Int32 Extension          = 0x0500;
-	public const Int32 SignatureAlgorithm = 0x0600;
+	SignatureSchemeList_SupportedSignatureAlgorithmsLength_ValueIsInvalid = ErrorCodeGroup.SignatureAlgorithm | 0x01
 }

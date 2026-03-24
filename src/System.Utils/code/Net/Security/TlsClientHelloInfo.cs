@@ -8,7 +8,7 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 
 /// <summary>
-/// Information about the ClientHello message, passed to the certificate selection callback.
+/// Contains information parsed from a received TLS ClientHello message.
 /// </summary>
 public readonly ref struct TlsClientHelloInfo
 {
@@ -23,17 +23,17 @@ public readonly ref struct TlsClientHelloInfo
 	#region Properties
 
 	/// <summary>
-	/// The number of cipher suites offered by the client in the ClientHello message.
+	/// The number of cipher suites offered by the client in the ClientHello.cipher_suites field.
 	/// </summary>
 	public Int32 CipherSuitesCount { get; }
 
 	/// <summary>
-	/// The number of signature algorithms offered by the client in the ClientHello message.
+	/// The number of signature algorithms offered by the client in the supported_signature_algorithms extension.
 	/// </summary>
 	public Int32 SignatureAlgorithmsCount { get; }
 
 	/// <summary>
-	/// The number of signature algorithms for certificates offered by the client in the ClientHello message.
+	/// The number of signature algorithms for certificates offered by the client in the signature_algorithms_cert extension.
 	/// </summary>
 	public Int32 SignatureAlgorithmsCertCount { get; }
 
@@ -44,9 +44,9 @@ public readonly ref struct TlsClientHelloInfo
 	/// <summary>
 	/// Initializes a new instance of the <see cref="TlsClientHelloInfo"/> struct.
 	/// </summary>
-	/// <param name="cipherSuites">The cipher suites offered by the client.</param>
-	/// <param name="signatureAlgorithms">The signature algorithms offered by the client.</param>
-	/// <param name="signatureAlgorithmsCert">The signature algorithms for certificates offered by the client.</param>
+	/// <param name="cipherSuites">The cipher suites offered by the client (ClientHello.cipher_suites).</param>
+	/// <param name="signatureAlgorithms">The signature algorithms offered by the client (supported_signature_algorithms extension).</param>
+	/// <param name="signatureAlgorithmsCert">The signature algorithms for certificates offered by the client (signature_algorithms_cert extension).</param>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	internal TlsClientHelloInfo
 	(
@@ -69,8 +69,10 @@ public readonly ref struct TlsClientHelloInfo
 	#region Methods
 
 	/// <summary>
-	/// The cipher suites.
+	/// Tries to copy the cipher suites offered by the client in the ClientHello.cipher_suites field.
 	/// </summary>
+	/// <param name="destination">The destination span to copy the cipher suites into. Must have a length equal to <see cref="CipherSuitesCount"/>.</param>
+	/// <returns>True if the copy was successful; false otherwise.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public Boolean TryCopyCipherSuites(Span<TlsCipherSuite> destination)
 	{
@@ -78,8 +80,10 @@ public readonly ref struct TlsClientHelloInfo
 	}
 
 	/// <summary>
-	/// The signature algorithms, from the supported_signature_algorithms extension.
+	/// Tries to copy the signature algorithms offered by the client in the supported_signature_algorithms extension.
 	/// </summary>
+	/// <param name="destination">The destination span to copy the signature algorithms into. Must have a length equal to <see cref="SignatureAlgorithmsCount"/>.</param>
+	/// <returns>True if the copy was successful; false otherwise.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public Boolean TryCopySignatureAlgorithms(Span<TlsSignatureScheme> destination)
 	{
@@ -87,8 +91,10 @@ public readonly ref struct TlsClientHelloInfo
 	}
 
 	/// <summary>
-	/// The signature algorithms, from the signature_algorithms_cert extension.
+	/// Tries to copy the signature algorithms for certificates offered by the client in the signature_algorithms_cert extension (RFC 8446 Section 4.2.3).
 	/// </summary>
+	/// <param name="destination">The destination span to copy the signature algorithms for certificates into. Must have a length equal to <see cref="SignatureAlgorithmsCertCount"/>.</param>
+	/// <returns>True if the copy was successful; false otherwise.</returns>
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	public Boolean TryCopySignatureAlgorithmsCert(Span<TlsSignatureScheme> destination)
 	{

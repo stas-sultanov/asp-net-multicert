@@ -6,9 +6,7 @@ namespace System.Net.Security;
 /// <summary>
 /// SignatureScheme enum as defined in <see href="https://www.rfc-editor.org/rfc/rfc8446#section-4.2.3">RFC 8446 Section 4.2.3</see>.
 /// </summary>
-#pragma warning disable CA1028 // Enum Storage should be Int32
 public enum TlsSignatureScheme : UInt16
-#pragma warning restore CA1028 // Enum Storage should be Int32
 {
 	/// <summary>
 	/// Indicates that no signature scheme is offered.
