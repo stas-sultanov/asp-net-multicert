@@ -22,21 +22,41 @@ public sealed class CipherSuitesIntegrationTests
 	#region Test Methods: Success
 
 	[TestMethod]
-	public async Task Server_Present_RSA_When_Client_Offers_Tls12_CipherSuite_RSA()
+	public async Task Server_Present_RSA_When_Client_Offers_Tls12_With_RSA()
 	{
 		const SslProtocols protocol = SslProtocols.Tls12;
 		var cipherSuites = new TlsCipherSuite[]
 		{
-			TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+			TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384
 		};
+		var expectedSignatureScheme = TlsSignatureScheme.rsa_pkcs1_sha256;
 
-		var actualAuthenticationAlgorithm = await RunServerAndConnect(protocol, cipherSuites);
+		var actualSignatureScheme = await RunServerAndConnect(protocol, cipherSuites, true, true, TestContext.CancellationToken);
 
-		Console.WriteLine($"Server presented a certificate with authentication algorithm: {actualAuthenticationAlgorithm}");
+		Assert.AreEqual(expectedSignatureScheme, actualSignatureScheme, $"Server Certificate Signature Scheme is invalid.");
 	}
 
 	[TestMethod]
-	public async Task Server_Present_ECDSA_When_Client_Offers_Tls13_CipherSuite_ECDSA()
+	public async Task Server_Present_ECDSA_When_Client_Offers_Tls12_Without_RSA()
+	{
+		const SslProtocols protocol = SslProtocols.Tls12;
+		var cipherSuites = new TlsCipherSuite[]
+		{
+			TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
+			TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384,
+			TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+			TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+		};
+		var expectedSignatureScheme = TlsSignatureScheme.ecdsa_secp256r1_sha256;
+
+		var actualSignatureScheme = await RunServerAndConnect(protocol, cipherSuites, false, true, TestContext.CancellationToken);
+
+		Assert.AreEqual(expectedSignatureScheme, actualSignatureScheme, $"Server Certificate Signature Scheme is invalid.");
+	}
+
+	[TestMethod]
+	public async Task Server_Present_ECDSA_When_Client_Offers_Tls13_Without_RSA()
 	{
 		const SslProtocols protocol = SslProtocols.Tls13;
 		var cipherSuites = new TlsCipherSuite[]
@@ -44,79 +64,13 @@ public sealed class CipherSuitesIntegrationTests
 			TlsCipherSuite.TLS_AES_128_GCM_SHA256,
 			TlsCipherSuite.TLS_AES_256_GCM_SHA384
 		};
+		var expectedSignatureScheme = TlsSignatureScheme.ecdsa_secp256r1_sha256;
 
-		// On the time of writing this test,
-		// .NET does not support configuring Signature Algorithms for TLS 1.3
-		// so client will send signature_algorithms extension which are configured within the OS.
-		// And I am too laizy to write code for this purpose.
-		var actualAuthenticationAlgorithm = await RunServerAndConnect(protocol, cipherSuites);
+		var actualSignatureScheme = await RunServerAndConnect(protocol, cipherSuites, false, true, TestContext.CancellationToken);
 
-		Console.WriteLine($"Server presented a certificate with authentication algorithm: {actualAuthenticationAlgorithm}");
+		Assert.AreEqual(expectedSignatureScheme, actualSignatureScheme, $"Server Certificate Signature Scheme is invalid.");
 	}
-	/*
-		[TestMethod]
-		public async Task Server_Present_RSA_When_Client_Offers_Tls12_CipherSuite_RSAMultiple()
-		{
-			const TlsCertificateAuthenticationAlgorithms expectedAuthenticationAlgorithm = TlsCertificateAuthenticationAlgorithms.RSA;
-			const SslProtocols protocol = SslProtocols.Tls12;
-			var cipherSuites = new TlsCipherSuite[]
-			{
-				TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
-				TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384,
-				TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_128_CBC_SHA256,
-				TlsCipherSuite.TLS_RSA_WITH_CAMELLIA_256_CBC_SHA
-			};
 
-			await TestServerPresentsRightCertificate(expectedAuthenticationAlgorithm, protocol, cipherSuites);
-		}
-
-		[TestMethod]
-		public async Task Server_Present_ECDSA_When_Client_Offers_Tls12_CipherSuite_ECDSA()
-		{
-			const TlsCertificateAuthenticationAlgorithms expectedAuthenticationAlgorithm = TlsCertificateAuthenticationAlgorithms.ECDSA;
-			const SslProtocols protocol = SslProtocols.Tls12;
-			var cipherSuites = new TlsCipherSuite[]
-			{
-				TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
-			};
-
-			await TestServerPresentsRightCertificate(expectedAuthenticationAlgorithm, protocol, cipherSuites);
-		}
-
-		[TestMethod]
-		public async Task Server_Present_ECDSA_When_Client_Offers_Tls12_CipherSuite_ECDSAMultiple()
-		{
-			const TlsCertificateAuthenticationAlgorithms expectedAuthenticationAlgorithm = TlsCertificateAuthenticationAlgorithms.ECDSA;
-			const SslProtocols protocol = SslProtocols.Tls12;
-			var cipherSuites = new TlsCipherSuite[]
-			{
-				TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-				TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-				TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
-				TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384
-			};
-
-			await TestServerPresentsRightCertificate(expectedAuthenticationAlgorithm, protocol, cipherSuites);
-		}
-
-		[TestMethod]
-		public async Task Server_Present_ECDSA_When_Client_Offers_Tls12_CipherSuite_Multiple()
-		{
-			const TlsCertificateAuthenticationAlgorithms expectedAuthenticationAlgorithm = TlsCertificateAuthenticationAlgorithms.ECDSA;
-			const SslProtocols protocol = SslProtocols.Tls12;
-			var cipherSuites = new TlsCipherSuite[]
-			{
-				TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-				TlsCipherSuite.TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-				TlsCipherSuite.TLS_RSA_WITH_AES_128_GCM_SHA256,
-				TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384
-			};
-
-			await TestServerPresentsRightCertificate(expectedAuthenticationAlgorithm, protocol, cipherSuites);
-		}
-
-
-	*/
 	#endregion
 
 	#region Helper Methods
@@ -127,7 +81,10 @@ public sealed class CipherSuitesIntegrationTests
 	private async Task<TlsSignatureScheme> RunServerAndConnect
 	(
 		SslProtocols protocol,
-		IEnumerable<TlsCipherSuite> cipherSuites
+		IEnumerable<TlsCipherSuite> cipherSuites,
+		Boolean clientUse_rsa_pkcs1,
+		Boolean clientUse_rsa_pss,
+		CancellationToken cancellationToken = default
 	)
 	{
 		// Create server.
@@ -137,29 +94,31 @@ public sealed class CipherSuitesIntegrationTests
 		using var serverApplication = server.Build();
 
 		// Start listening for incoming connections.
-		await serverApplication.StartAsync(TestContext.CancellationToken);
+		await serverApplication.StartAsync(cancellationToken);
 
 		// Retrieve the port the server is actually bound to (port 0 lets the OS assign one).
 		var port = new Uri(serverApplication.Urls.First()).Port;
 
 		// Connect to the server with a client configured to use the expected cipher suite.
-		var result = await ConnectAndGetCertificateInfo(port, protocol, cipherSuites, TestContext.CancellationToken);
+		var result = await ConnectAndGetServerCertificate(port, protocol, cipherSuites, clientUse_rsa_pkcs1, clientUse_rsa_pss, cancellationToken);
 
 		// Stop the server application.
-		await serverApplication.StopAsync(TestContext.CancellationToken);
+		await serverApplication.StopAsync(cancellationToken);
 
 		return result;
 	}
 
 	/// <summary>
-	/// A helper method to connect to the server and retrieve the certificate authentication algorithm of the presented certificate.
+	/// A helper method to connect to the server and retrieve the certificate presented by the server.
 	/// </summary>
 	[Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5359:Do Not Disable Certificate Validation", Justification = "<Pending>")]
-	private async Task<TlsSignatureScheme> ConnectAndGetCertificateInfo
+	private async Task<TlsSignatureScheme> ConnectAndGetServerCertificate
 	(
 		Int32 port,
 		SslProtocols protocol,
 		IEnumerable<TlsCipherSuite> cipherSuites,
+		Boolean use_rsa_pkcs1,
+		Boolean use_rsa_pss,
 		CancellationToken cancellationToken = default
 	)
 	{
@@ -172,8 +131,8 @@ public sealed class CipherSuitesIntegrationTests
 
 		var sslClientAuthenticationOptions = new SslClientAuthenticationOptions
 		{
-			AllowRsaPkcs1Padding = false,
-			AllowRsaPssPadding = false,
+			AllowRsaPkcs1Padding = use_rsa_pkcs1,
+			AllowRsaPssPadding = use_rsa_pss,
 			CertificateRevocationCheckMode = X509RevocationMode.NoCheck,
 			CipherSuitesPolicy = cipherSuitesPolicy,
 			EnabledSslProtocols = protocol,
@@ -198,23 +157,8 @@ public sealed class CipherSuitesIntegrationTests
 
 		var serverCertificate = new X509Certificate2(sslStream.RemoteCertificate);
 
-		return TlsSignatureScheme.None;
+		return CertificateHelper.GetSignatureScheme(serverCertificate);
 	}
 
-	/*
-		private static TlsSignatureScheme GetCertificateAuthenticationAlgorithm(X509Certificate2 certificate)
-		{
-			var publicKeyOid = certificate.PublicKey.Oid?.Value;
-
-			return publicKeyOid switch
-			{
-				AlgorithmIdentifier.Rsa => TlsCertificateAuthenticationAlgorithms.RSA,
-				AlgorithmIdentifier.EcPublicKey => TlsCertificateAuthenticationAlgorithms.ECDSA,
-				AlgorithmIdentifier.Ed25519 => TlsCertificateAuthenticationAlgorithms.EdDSA,
-				AlgorithmIdentifier.Ed448 => TlsCertificateAuthenticationAlgorithms.EdDSA,
-				_ => TlsCertificateAuthenticationAlgorithms.None
-			};
-		}
-	*/
 	#endregion
 }

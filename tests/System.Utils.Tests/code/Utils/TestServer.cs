@@ -2,6 +2,7 @@
 // Copyright © Stas Sultanov
 
 using System.Buffers;
+using System.Collections.Frozen;
 using System.Net;
 using System.Net.Security;
 using System.Runtime.Versioning;
@@ -18,19 +19,14 @@ using Microsoft.AspNetCore.Server.Kestrel.Https;
 
 /// <summary>
 /// A self-contained HTTPS test server built on Kestrel that demonstrates certificate selection
-/// based on the certificate authentication algorithms advertised in the TLS ClientHello message.
-/// Supports both ECDsa and RSA certificates.
+/// based on the client capabilities advertised in the TLS ClientHello message.
 /// </summary>
 [SupportedOSPlatform("linux")]
 internal sealed class TestServer
 {
 	#region Fields
 
-	/// <summary>
-	/// The key used to store the parsed <see cref="AuthenticationAlgorithm"/> value
-	/// in <see cref="ConnectionContext"/> during the TLS handshake.
-	/// </summary>
-	private const String AuthenticationAlgorithmKey = "AuthenticationAlgorithm";
+	private const String SignatureSchemeKey = "SignatureScheme";
 
 	/// <summary>
 	/// The set of TLS cipher suites the server is restricted to.
@@ -48,31 +44,37 @@ internal sealed class TestServer
 		TlsCipherSuite.TLS_RSA_WITH_AES_256_GCM_SHA384
 	];
 
-	/// <summary>Self-signed ECDsa certificate used when the client supports ECDSA certificate authentication.</summary>
-	private readonly X509Certificate2 certificateECDsa;
-
-	/// <summary>Self-signed RSA certificate used when the client supports RSA certificate authentication.</summary>
-	private readonly X509Certificate2 certificate_rsa_pkcs1_sha256;
+	/// <summary>
+	/// A store of server certificates keyed by the signature scheme.
+	/// </summary>
+	private readonly FrozenDictionary<TlsSignatureScheme, X509Certificate2> certificateStore;
 
 	#endregion
 
 	#region Constructors
 
-	/// <summary>
-	/// Initializes a new <see cref="TestServer"/> instance by generating self-signed
-	/// ECDsa and RSA certificates via <see cref="CertificateHelper"/>.
-	/// </summary>
+	/// <summary>Initializes a new <see cref="TestServer"/>.</summary>
 	public TestServer()
 	{
+		// create self-signed certificates for testing
 		var certificateHelper = new CertificateHelper();
 
-		certificateECDsa = certificateHelper.CreateSelfSignedCertificateECDsa();
+		var certificate_ecdsa_secp256r1_sha256 = certificateHelper.CreateSelfSignedCertificateECDsa(ECCurve.NamedCurves.nistP256, HashAlgorithmName.SHA256);
+		var certificate_rsa_pkcs1_sha256 = certificateHelper.CreateSelfSignedCertificateRSA(RSASignaturePadding.Pkcs1, HashAlgorithmName.SHA256);
+		var certificate_rsa_pkcs1_sha512 = certificateHelper.CreateSelfSignedCertificateRSA(RSASignaturePadding.Pkcs1, HashAlgorithmName.SHA512);
 
-		// rsa_pkcs1_sha256
-		certificate_rsa_pkcs1_sha256 = certificateHelper.CreateSelfSignedCertificateRSA(RSASignaturePadding.Pkcs1, HashAlgorithmName.SHA256);
+		// Order of keys defines behaviour of certificate selection when client supports multiple signature schemes.
+		certificateStore = new OrderedDictionary<TlsSignatureScheme, X509Certificate2>
+		{
+			{ TlsSignatureScheme.rsa_pkcs1_sha256, certificate_rsa_pkcs1_sha256 },
+			{ TlsSignatureScheme.rsa_pkcs1_sha512, certificate_rsa_pkcs1_sha512 },
+			{ TlsSignatureScheme.ecdsa_secp256r1_sha256, certificate_ecdsa_secp256r1_sha256 }
+		}.ToFrozenDictionary();
 	}
 
 	#endregion
+
+	#region Methods: Public
 
 	/// <summary>
 	/// Builds and configures a <see cref="WebApplication"/> that listens on the specified
@@ -131,25 +133,15 @@ internal sealed class TestServer
 		return result;
 	}
 
+	#endregion
+
 	#region Methods: Private
 
-	/// <summary>
-	/// Applies the restricted <see cref="tlsCipherSuites"/> policy to every new TLS connection.
-	/// Called once per connection after the connection is established but before the handshake completes.
-	/// </summary>
-	private static void OnAuthenticate(ConnectionContext _, SslServerAuthenticationOptions sslOptions)
-	{
-		sslOptions.CipherSuitesPolicy = new CipherSuitesPolicy(tlsCipherSuites);
-	}
-
-	/// <summary>
-	/// Parses the raw TLS ClientHello bytes to extract the client's supported certificate authentication algorithms
-	/// and stores them in <see cref="ConnectionContext"/> for later use by <see cref="SelectCertifiacte"/>.
-	/// If parsing fails, the error code is stored instead.
-	/// </summary>
-	/// <param name="connectionContext">The connection context for the incoming TLS connection.</param>
-	/// <param name="data">The raw bytes of the TLS ClientHello message.</param>
-	private static void OnTlsClientHelloBytes(ConnectionContext connectionContext, ReadOnlySequence<Byte> data)
+	private void OnTlsClientHelloBytes
+	(
+		ConnectionContext connectionContext,
+		ReadOnlySequence<Byte> data
+	)
 	{
 		var parseResult = TlsClientHelloParser.TryParse(data, out var clientHelloInfo);
 
@@ -159,10 +151,37 @@ internal sealed class TestServer
 			return;
 		}
 
-		if (CertificateSelector.TrySelectAlogrithm(clientHelloInfo, out var authenticationAlgorithm))
+		if (TrySelectSignatureScheme(clientHelloInfo, out var authenticationAlgorithm))
 		{
-			connectionContext.Items[AuthenticationAlgorithmKey] = authenticationAlgorithm;
+			connectionContext.Items[SignatureSchemeKey] = authenticationAlgorithm;
 		}
+	}
+
+	private X509Certificate2? SelectCertifiacte(ConnectionContext? context, String? name)
+	{
+		if (context is null)
+		{
+			return null;
+		}
+
+		if (!context.Items.TryGetValue(SignatureSchemeKey, out var signatureSchemeObj))
+		{
+			return null;
+		}
+
+		if (signatureSchemeObj is not TlsSignatureScheme signatureScheme)
+		{
+			return null;
+		}
+
+		_ = certificateStore.TryGetValue(signatureScheme, out var certificate);
+
+		return certificate;
+	}
+
+	private static void OnAuthenticate(ConnectionContext _, SslServerAuthenticationOptions sslOptions)
+	{
+		sslOptions.CipherSuitesPolicy = new CipherSuitesPolicy(tlsCipherSuites);
 	}
 
 	/// <summary>Returns HTTP 200 OK for the root endpoint.</summary>
@@ -172,45 +191,62 @@ internal sealed class TestServer
 	}
 
 	/// <summary>
-	/// Selects the appropriate server certificate based on the certificate authentication algorithms
-	/// advertised by the client in its TLS ClientHello message.
-	/// Prefers ECDsa over RSA when both are supported by the client.
+	/// Tries to select a TLS signature scheme supported by both the client and the server.
 	/// </summary>
-	/// <param name="context">The connection context carrying the parsed certificate authentication algorithms.</param>
-	/// <param name="_">The server name indication value (unused).</param>
-	/// <returns>
-	/// The <see cref="certificateECDsa"/> if the client supports ECDSA,
-	/// the <see cref="certificate_rsa_pkcs1_sha256"/> if the client supports RSA,
-	/// or <see langword="null"/> if the context is missing or parsing failed.
-	/// </returns>
-	private X509Certificate2? SelectCertifiacte(ConnectionContext? context, String? _)
+	/// <param name="clientHelloInfo">The client hello information.</param>
+	/// <param name="signatureScheme">The selected TLS signature scheme.</param>
+	/// <returns><c>true</c> if a compatible signature scheme is found; otherwise, <c>false</c>.</returns>
+	private Boolean TrySelectSignatureScheme
+	(
+		in TlsClientHelloInfo clientHelloInfo,
+		out TlsSignatureScheme signatureScheme
+	)
 	{
-		if (context is null)
+		// TLS 1.3: Get signature schemes from signature_algorithms_cert extension
+		if (clientHelloInfo.SignatureAlgorithmsCertCount != 0)
 		{
-			return null;
+			// Allocate memory from the stack
+			Span<TlsSignatureScheme> clientSignatureSchemes = stackalloc TlsSignatureScheme[clientHelloInfo.SignatureAlgorithmsCertCount];
+
+			if (clientHelloInfo.TryCopySignatureAlgorithmsCert(clientSignatureSchemes))
+			{
+				// Walk through certificates available on the server
+				foreach (var serverSignatureScheme in certificateStore.Keys)
+				{
+					if (clientSignatureSchemes.Contains(serverSignatureScheme))
+					{
+						signatureScheme = serverSignatureScheme;
+						return true;
+					}
+				}
+			}
 		}
 
-		if (!context.Items.TryGetValue(AuthenticationAlgorithmKey, out var authenticationAlgorithmsObj))
+		// TLS 1.3 and 1.2: Get algorithms from signature_algorithms extension
+		if (clientHelloInfo.SignatureAlgorithmsCount != 0)
 		{
-			return null;
+			// Allocate memory from the stack
+			Span<TlsSignatureScheme> clientSignatureSchemes = stackalloc TlsSignatureScheme[clientHelloInfo.SignatureAlgorithmsCount];
+
+			if (clientHelloInfo.TryCopySignatureAlgorithms(clientSignatureSchemes))
+			{
+				// Walk through certificates available on the server
+				foreach (var serverSignatureScheme in certificateStore.Keys)
+				{
+					if (clientSignatureSchemes.Contains(serverSignatureScheme))
+					{
+						// Here maybe additional logic in case of TLS 1.2
+						// to check if the signature scheme is compatible with the negotiated cipher suite
+						// but for simplicity we assume it is
+						signatureScheme = serverSignatureScheme;
+						return true;
+					}
+				}
+			}
 		}
 
-		if (authenticationAlgorithmsObj is not AuthenticationAlgorithm authenticationAlgorithms)
-		{
-			return null;
-		}
-
-		if (authenticationAlgorithms.HasFlag(AuthenticationAlgorithm.ECDSA))
-		{
-			return certificateECDsa;
-		}
-
-		if (authenticationAlgorithms.HasFlag(AuthenticationAlgorithm.RSA))
-		{
-			return certificate_rsa_pkcs1_sha256;
-		}
-
-		return null;
+		signatureScheme = default;
+		return false;
 	}
 
 	#endregion
